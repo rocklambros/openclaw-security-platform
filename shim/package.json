@@ -1,0 +1,12 @@
+{
+  "name": "openclaw-security",
+  "version": "0.1.0",
+  "description": "Thin OpenClaw plugin that forwards interceptor events to the Python security platform",
+  "main": "src/index.ts",
+  "openclaw": {
+    "extensions": ["./src/index.ts"]
+  },
+  "peerDependencies": {
+    "openclaw": ">=2026.2.0"
+  }
+}

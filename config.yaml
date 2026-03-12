@@ -1,0 +1,107 @@
+##
+## OpenClaw Security Platform — example configuration
+##
+## Copy this file to openclaw-security.yaml and customize.
+##
+
+server:
+  host: 127.0.0.1
+  port: 9920
+  # unix_socket: /tmp/openclaw-security.sock  # preferred for local comms
+
+reporting:
+  log_file: ./logs/audit.jsonl
+  # webhook_url: https://your-siem.example.com/webhook
+  # webhook_events: [block, redact]
+
+evaluators:
+  # ── Regex: fast pattern matching (µs) ─────────────────────────
+  - name: secrets-scanner
+    type: regex
+    stages: [tool.before, tool.after]
+    rules:
+      - label: AWS Access Key
+        pattern: "AKIA[0-9A-Z]{16}"
+        action: redact
+      - label: GitHub Token
+        pattern: "ghp_[A-Za-z0-9]{36}"
+        action: redact
+      - label: Generic API Key
+        pattern: "(?i)(api[_-]?key|secret[_-]?key|access[_-]?token)\\s*[:=]\\s*['\"]?[A-Za-z0-9]{20,}"
+        action: warn
+
+  - name: dangerous-commands
+    type: regex
+    stages: [tool.before]
+    rules:
+      - label: Recursive delete root
+        pattern: "rm\\s+-rf\\s+/"
+        action: block
+        fields: [tool_args.command]
+      - label: Drop table
+        pattern: "(?i)DROP\\s+TABLE"
+        action: block
+      - label: Curl to external with secrets
+        pattern: "curl.*(-H|--header).*([Aa]uthorization|[Bb]earer)"
+        action: warn
+        fields: [tool_args.command]
+
+  # ── Sigma: structured threat detection (ms) ───────────────────
+  - name: sigma-threats
+    type: sigma
+    stages: [tool.before, tool.after]
+    rules_dir: ./rules/sigma/
+
+  # ── CEL: conditional policy rules (ms) ────────────────────────
+  - name: access-policies
+    type: cel
+    stages: [tool.before]
+    rules:
+      - label: block-exec-non-admin
+        expr: 'tool_name == "exec" && user_id != "admin"'
+        action: warn
+        reason: Shell execution by non-admin user
+
+  # ── SQL: temporal / aggregate analysis (~10ms) ────────────────
+  - name: rate-limiter
+    type: sql
+    stages: [tool.before, tool.after]
+    rules:
+      - label: exec-burst
+        query: >
+          SELECT COUNT(*) as cnt FROM events
+          WHERE tool_name = 'exec' AND session_id = :session_id
+          AND timestamp > :now - 60
+        condition: "cnt > 20"
+        action: block
+        reason: "Too many tool executions in 60 seconds (rate limit: 20)"
+
+      - label: file-write-burst
+        query: >
+          SELECT COUNT(*) as cnt FROM events
+          WHERE tool_name = 'write_file' AND session_id = :session_id
+          AND timestamp > :now - 30
+        condition: "cnt > 15"
+        action: warn
+        reason: "High file write rate detected"
+
+  # ── ML: local model inference (~50ms) ─────────────────────────
+  # - name: prompt-injection-detector
+  #   type: ml
+  #   stages: [message.before]
+  #   model_path: ./models/prompt-injection-v3.onnx
+  #   threshold: 0.85
+  #   action: block
+  #   label: prompt_injection
+
+  # ── LLM: semantic evaluation (~500ms) ─────────────────────────
+  # - name: semantic-guard
+  #   type: llm
+  #   stages: [tool.after]
+  #   provider: anthropic
+  #   model: claude-haiku-4-5-20251001
+  #   policy: |
+  #     Evaluate whether the tool output contains sensitive information
+  #     that should not leave the user's session. Consider: PII, credentials,
+  #     internal system paths, proprietary data.
+  #   default_action: warn
