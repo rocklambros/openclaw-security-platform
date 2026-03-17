@@ -21,9 +21,32 @@ title: OpenClaw Security Platform
   </div>
 </div>
 
+<section id="problem">
+  <div class="container">
+    <div class="section-label">The Problem</div>
+    <h2>OpenClaw has no security layer</h2>
+    <p class="section-desc" style="max-width: 720px;">
+      OpenClaw gives your AI agent access to messaging platforms, shell commands, file systems, and APIs — but ships with no security layer. This project fills that gap.
+    </p>
+    <div class="cards" style="grid-template-columns: 1fr 1fr;">
+      <div class="card">
+        <h3>You pick the evaluators</h3>
+        <p>Already running OpenClaw? Drop this in. No fork, no migration — it's a plugin. Have your own detection models? Plug them in as ONNX models or LLM-as-judge policies.</p>
+      </div>
+      <div class="card">
+        <h3>You write the rules</h3>
+        <p>Want to reuse your SOC's Sigma rules? Point them at OpenClaw events. Need custom policies? Write them in regex, CEL, SQL, or Python — your choice.</p>
+      </div>
+    </div>
+    <p style="color: var(--text-secondary); font-size: 1.05rem; margin-top: 2rem; max-width: 720px;">
+      The platform doesn't tell you what's dangerous. <strong style="color: var(--text-primary);">You</strong> tell <strong style="color: var(--text-primary);">it</strong> — through whatever combination of evaluators fits your threat model.
+    </p>
+  </div>
+</section>
+
 <section id="why">
   <div class="container">
-    <div class="section-label">Why</div>
+    <div class="section-label">How It Works</div>
     <h2>Guard every stage of the agent lifecycle</h2>
     <p class="section-desc">
       OpenClaw gives you hooks into the agent loop. This platform turns those hooks
@@ -74,72 +97,42 @@ title: OpenClaw Security Platform
         <div class="card-type">regex</div>
         <h3>Pattern Matching</h3>
         <p>Microsecond-fast secret scanning and command detection. Ships with rules for AWS keys, GitHub tokens, PII, and dangerous commands.</p>
-<pre>- label: AWS Access Key
-  pattern: "AKIA[0-9A-Z]{16}"
-  action: redact</pre>
       </div>
 
       <div class="card">
         <div class="card-type">sigma</div>
         <h3>Threat Detection</h3>
         <p>Industry-standard YAML detection rules mapped to OpenClaw events. Reuse rules from the entire Sigma ecosystem.</p>
-<pre>title: Dangerous file write
-detection:
-  selection:
-    tool_name: write_file
-    tool_args.path|contains: '/etc/'
-  condition: selection
-level: high</pre>
       </div>
 
       <div class="card">
         <div class="card-type">cel</div>
         <h3>Policy Rules</h3>
         <p>Common Expression Language for conditional policies. Full access to every event field with boolean logic.</p>
-<pre>- label: block-rm-rf
-  expr: >
-    tool_name == "exec" &&
-    tool_args_command.matches("rm\\s+-r")
-  action: block</pre>
       </div>
 
       <div class="card">
         <div class="card-type">sql</div>
         <h3>Aggregate Analytics</h3>
         <p>In-memory SQLite for temporal queries — rate limiting, burst detection, session-level anomaly scoring.</p>
-<pre>- label: exec-burst
-  query: >
-    SELECT COUNT(*) as cnt FROM events
-    WHERE tool_name = 'exec'
-    AND timestamp > :now - 60
-  condition: "cnt > 20"
-  action: block</pre>
       </div>
 
       <div class="card">
         <div class="card-type">ml</div>
         <h3>Local Model Inference</h3>
         <p>ONNX Runtime models for prompt injection, toxicity, and custom classifiers. Runs locally — no API calls, no data leaves your machine.</p>
-<pre>- name: prompt-injection-detector
-  type: ml
-  model_path: ./models/pi-v3.onnx
-  threshold: 0.85
-  action: block</pre>
       </div>
 
       <div class="card">
         <div class="card-type">llm</div>
         <h3>Semantic Evaluation</h3>
         <p>Use Claude as a judge for nuanced decisions that rules can't capture. Policy-driven, structured verdicts.</p>
-<pre>- name: semantic-guard
-  type: llm
-  model: claude-haiku-4-5-20251001
-  policy: |
-    Does the output contain
-    sensitive information?
-  default_action: warn</pre>
       </div>
     </div>
+
+    <p style="color: var(--text-secondary); font-size: 0.95rem; margin-top: 2rem;">
+      Every evaluator type is extensible — bring your own rules, models, and policies. See the <a href="https://github.com/zenitysec/openclaw-security-platform">GitHub repo</a> for configuration examples and how to write custom evaluators.
+    </p>
   </div>
 </section>
 
@@ -148,24 +141,40 @@ level: high</pre>
     <div class="section-label">Architecture</div>
     <h2>Thin shim, heavy Python</h2>
     <p class="section-desc">
-      A ~130-line TypeScript plugin forwards OpenClaw hook events to a Python evaluation server over HTTP.
+      A lightweight TypeScript plugin forwards OpenClaw hook events to a Python evaluation server over HTTP.
     </p>
 
-    <div class="arch-box">
-<pre>
- OpenClaw Gateway                    Python Evaluation Server
- ─────────────────                   ─────────────────────────
+    <div class="arch-diagram">
+      <div class="arch-node arch-node-gateway">
+        <div class="arch-node-label">Plugin</div>
+        <h3>OpenClaw Gateway</h3>
+        <div class="arch-hooks">
+          <div class="arch-hook"><span class="arch-hook-dot blue"></span> before_tool_call</div>
+          <div class="arch-hook"><span class="arch-hook-dot amber"></span> after_tool_call</div>
+          <div class="arch-hook"><span class="arch-hook-dot green"></span> message_received</div>
+        </div>
+      </div>
 
- before_tool_call ──┐               ┌──────────────────────────┐
- after_tool_call  ──┼── HTTP POST ──▶  Evaluator Chain          │
- message_received ──┘   /evaluate   │                          │
-                                    │  regex → sigma → CEL     │
-                                    │  → SQL → ML → LLM       │
-              ◀─────────────────────┤                          │
-              { action, blocked,    │  Short-circuits on BLOCK │
-                reasons, redacted } │  block > redact > warn   │
-                                    └──────────────────────────┘
-</pre>
+      <div class="arch-connector">
+        <div class="arch-connector-arrow">HTTP POST<br>/evaluate</div>
+      </div>
+
+      <div class="arch-node arch-node-server">
+        <div class="arch-node-label">Evaluation Server</div>
+        <h3>Evaluator Chain</h3>
+        <div class="arch-chain-list">
+          <div class="arch-chain-item"><span class="name">regex</span><span class="latency">~1 μs</span></div>
+          <div class="arch-chain-item"><span class="name">sigma</span><span class="latency">~1 ms</span></div>
+          <div class="arch-chain-item"><span class="name">CEL</span><span class="latency">~1 ms</span></div>
+          <div class="arch-chain-item"><span class="name">SQL</span><span class="latency">~10 ms</span></div>
+          <div class="arch-chain-item"><span class="name">ML</span><span class="latency">~50 ms</span></div>
+          <div class="arch-chain-item"><span class="name">LLM</span><span class="latency">~500 ms</span></div>
+        </div>
+        <div class="arch-response">
+          <span>→</span> { action, blocked, reasons, redacted }<br>
+          Short-circuits on <span>BLOCK</span> · block > redact > warn
+        </div>
+      </div>
     </div>
   </div>
 </section>
@@ -239,55 +248,6 @@ level: high</pre>
         <p style="margin-top: 1rem;">Returns evaluator count and server status. Use for monitoring and liveness probes.</p>
       </div>
     </div>
-  </div>
-</section>
-
-<section id="extend">
-  <div class="container">
-    <div class="section-label">Extend</div>
-    <h2>Build your own evaluator</h2>
-    <p class="section-desc">
-      Subclass <code>Evaluator</code>, implement <code>evaluate()</code>, register it. That's it.
-    </p>
-
-<pre>from openclaw_security.evaluators.base import Evaluator
-from openclaw_security.engine.context import EvalContext
-from openclaw_security.engine.result import EvalResult, Action
-
-class MyEvaluator(Evaluator):
-    eval_type = "custom"
-
-    async def evaluate(self, ctx: EvalContext) -> EvalResult:
-        if "bad" in ctx.searchable_text():
-            return self._result(Action.BLOCK, 1.0, "Blocked")
-        return self._result(Action.ALLOW, 0.0, "Clean")</pre>
-
-    <p style="color: var(--text-secondary); margin-top: 1rem;">
-      Register in <code>openclaw_security/evaluators/__init__.py</code> and it joins the chain automatically.
-    </p>
-  </div>
-</section>
-
-<section id="testing">
-  <div class="container">
-    <div class="section-label">Testing</div>
-    <h2>101 tests, all green</h2>
-    <p class="section-desc">
-      Unit tests for every evaluator type, chain behavior, and server endpoint.
-      Integration tests spin up the real eval server and OpenClaw gateway.
-    </p>
-
-<pre># Unit tests (~4s)
-pytest tests/ --ignore=tests/test_integration.py
-
-# Integration tests (eval server + HTTP pipeline)
-pytest tests/test_integration.py -m "not slow"
-
-# Full gateway integration
-pytest tests/test_integration.py -m slow
-
-# Everything
-pytest tests/</pre>
   </div>
 </section>
 

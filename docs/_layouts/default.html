@@ -208,7 +208,6 @@
       border: 1px solid var(--border);
       border-radius: 12px;
       margin: 2rem 0;
-      overflow-x: auto;
     }
 
     .chain-step {
@@ -286,12 +285,23 @@
       border: 1px solid var(--code-border);
       border-radius: 10px;
       padding: 1.25rem 1.5rem;
-      overflow-x: auto;
+      overflow-x: hidden;
       font-family: 'JetBrains Mono', monospace;
       font-size: 0.82rem;
       line-height: 1.7;
       color: var(--text-secondary);
       margin: 1rem 0;
+    }
+
+    html {
+      overflow-x: hidden;
+      scrollbar-width: none;
+      -ms-overflow-style: none;
+    }
+    html::-webkit-scrollbar { display: none; }
+
+    .chain-flow {
+      overflow-x: hidden;
     }
 
     code {
@@ -342,21 +352,154 @@
     }
 
     /* ── Architecture diagram ─────────────────────── */
-    .arch-box {
-      background: var(--bg-card);
-      border: 1px solid var(--border);
-      border-radius: 14px;
-      padding: 2.5rem;
+    .arch-diagram {
+      display: flex;
+      align-items: stretch;
+      gap: 0;
       margin: 2rem 0;
+      position: relative;
     }
 
-    .arch-box pre {
-      background: none;
-      border: none;
-      padding: 0;
-      margin: 0;
+    .arch-node {
+      flex: 1;
+      border-radius: 14px;
+      padding: 2rem 1.75rem;
+      position: relative;
+    }
+
+    .arch-node-gateway {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+    }
+
+    .arch-node-server {
+      background: linear-gradient(135deg, rgba(255,107,94,0.06) 0%, var(--bg-card) 100%);
+      border: 1px solid rgba(255,107,94,0.25);
+    }
+
+    .arch-node-label {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.7rem;
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      color: var(--text-muted);
+      margin-bottom: 0.75rem;
+    }
+
+    .arch-node-server .arch-node-label {
+      color: var(--accent);
+    }
+
+    .arch-node h3 {
+      font-family: 'Space Grotesk', sans-serif;
+      font-size: 1.15rem;
+      font-weight: 600;
+      margin-bottom: 1.25rem;
+      color: var(--text-primary);
+    }
+
+    .arch-hooks {
+      display: flex;
+      flex-direction: column;
+      gap: 0.5rem;
+    }
+
+    .arch-hook {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      padding: 0.5rem 0.75rem;
+      background: var(--bg-secondary);
+      border: 1px solid var(--border-subtle);
+      border-radius: 8px;
+      font-family: 'JetBrains Mono', monospace;
       font-size: 0.78rem;
       color: var(--text-secondary);
+    }
+
+    .arch-hook-dot {
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      flex-shrink: 0;
+    }
+
+    .arch-hook-dot.blue { background: #60a5fa; box-shadow: 0 0 6px rgba(96,165,250,0.4); }
+    .arch-hook-dot.amber { background: #fbbf24; box-shadow: 0 0 6px rgba(251,191,36,0.4); }
+    .arch-hook-dot.green { background: #4ade80; box-shadow: 0 0 6px rgba(74,222,128,0.4); }
+
+    .arch-connector {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      width: 120px;
+      flex-shrink: 0;
+      position: relative;
+      padding: 0 0.5rem;
+    }
+
+    .arch-connector-line {
+      position: absolute;
+      top: 30%;
+      bottom: 30%;
+      width: 2px;
+      left: 50%;
+      transform: translateX(-50%);
+    }
+
+    .arch-connector-arrow {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.7rem;
+      color: var(--text-muted);
+      background: var(--bg-primary);
+      padding: 0.4rem 0.6rem;
+      border-radius: 6px;
+      border: 1px solid var(--border-subtle);
+      text-align: center;
+      position: relative;
+      z-index: 1;
+      line-height: 1.4;
+    }
+
+    .arch-chain-list {
+      display: flex;
+      flex-direction: column;
+      gap: 0.4rem;
+    }
+
+    .arch-chain-item {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0.45rem 0.75rem;
+      background: var(--bg-secondary);
+      border: 1px solid var(--border-subtle);
+      border-radius: 8px;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.78rem;
+    }
+
+    .arch-chain-item .name { color: var(--text-primary); }
+    .arch-chain-item .latency { color: var(--text-muted); font-size: 0.7rem; }
+
+    .arch-response {
+      margin-top: 1.25rem;
+      padding: 0.75rem 1rem;
+      background: rgba(255,107,94,0.06);
+      border: 1px dashed rgba(255,107,94,0.25);
+      border-radius: 8px;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.72rem;
+      color: var(--text-muted);
+      line-height: 1.5;
+    }
+
+    .arch-response span { color: var(--accent); }
+
+    @media (max-width: 768px) {
+      .arch-diagram { flex-direction: column; gap: 1rem; }
+      .arch-connector { width: 100%; height: 50px; flex-direction: row; }
     }
 
     /* ── Steps ────────────────────────────────────── */
