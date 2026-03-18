@@ -9,6 +9,7 @@ from __future__ import annotations
 import argparse
 import logging
 import sys
+import time as _time
 from contextlib import asynccontextmanager
 from typing import Any
 
@@ -18,6 +19,8 @@ from pydantic import BaseModel, Field
 
 from openclaw_security.config.loader import build_chain, load_config
 from openclaw_security.config.schema import PlatformConfig
+from openclaw_security.dashboard.routes import router as dashboard_router
+from openclaw_security.dashboard.store import DashboardEvent, EventStore
 from openclaw_security.engine.chain import EvaluatorChain
 from openclaw_security.engine.context import EvalContext, Stage
 from openclaw_security.engine.result import Action, AggregatedResult
@@ -33,6 +36,7 @@ _chain: EvaluatorChain | None = None
 _config: PlatformConfig | None = None
 _audit: AuditLogger | None = None
 _webhook: WebhookReporter | None = None
+_event_store: EventStore = EventStore()
 
 
 # --- Request / Response models ---
@@ -83,8 +87,11 @@ async def lifespan(app: FastAPI):
             events=set(_config.reporting.webhook_events),
         )
 
+    # Dashboard event store
+    app.state.event_store = _event_store
+
     logger.info(
-        "OpenClaw Security Platform started — %d evaluators loaded",
+        "OpenClaw Security Platform started — %d evaluators loaded — dashboard at /dashboard",
         len(_chain),
     )
     yield
@@ -92,6 +99,7 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(title="OpenClaw Security Platform", version="0.1.0", lifespan=lifespan)
+app.include_router(dashboard_router)
 
 
 @app.post("/evaluate", response_model=EvaluateResponse)
@@ -115,13 +123,40 @@ async def evaluate(req: EvaluateRequest) -> EvaluateResponse:
     if req.timestamp is not None:
         ctx.timestamp = req.timestamp
 
+    t0 = _time.monotonic()
     result: AggregatedResult = await _chain.run(ctx)
+    elapsed_ms = (_time.monotonic() - t0) * 1000
 
-    # Side-effects: audit log + webhook
+    # Side-effects: audit log + webhook + dashboard
     if _audit:
         _audit.log(ctx, result)
     if _webhook and result.action.value in (_webhook.events or set()):
         await _webhook.send(ctx, result)
+
+    _event_store.push(
+        DashboardEvent(
+            id=0,
+            timestamp=ctx.timestamp,
+            stage=ctx.stage.value,
+            session_id=ctx.session_id,
+            user_id=ctx.user_id,
+            tool_name=ctx.tool_name,
+            action=result.action.value,
+            blocked=result.blocked,
+            reasons=result.reasons,
+            redacted=result.redacted is not None,
+            evaluator_results=[
+                {
+                    "evaluator": r.evaluator,
+                    "action": r.action.value,
+                    "confidence": r.confidence,
+                    "reason": r.reason,
+                }
+                for r in result.results
+            ],
+            elapsed_ms=elapsed_ms,
+        )
+    )
 
     return EvaluateResponse(
         action=result.action.value,

@@ -217,6 +217,27 @@ title: OpenClaw Security Platform
   </div>
 </section>
 
+<section id="dashboard">
+  <div class="container">
+    <div class="section-label">Visibility</div>
+    <h2>Real-time security dashboard</h2>
+    <p class="section-desc">
+      Every evaluation streams live to a built-in dashboard at <code>/dashboard</code> — no extra setup required.
+    </p>
+
+    <div class="cards" style="grid-template-columns: 1fr 1fr;">
+      <div class="card">
+        <h3>Live event stream</h3>
+        <p>Every block, redact, warn, and allow appears instantly via Server-Sent Events. Filter by action, stage, or free-text search. Click any event for full evaluator details.</p>
+      </div>
+      <div class="card">
+        <h3>Stats and history</h3>
+        <p>Running totals for every action type. In-memory history of the last 10,000 events with latency tracking per evaluation. All available via API at <code>/dashboard/api/</code>.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
 <section id="api">
   <div class="container">
     <div class="section-label">API</div>

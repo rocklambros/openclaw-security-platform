@@ -220,6 +220,16 @@ Actions by priority: **block** > **redact** > **warn** > **allow**.
 - **Audit log** — append-only JSON-lines file with every evaluation result, timing, and metadata
 - **Webhook** — POST blocked/redacted events to an external endpoint (SIEM, Slack, PagerDuty)
 
+## Dashboard
+
+A built-in real-time dashboard is available at `http://127.0.0.1:9920/dashboard` when the server is running. No extra setup required.
+
+- **Live event stream** — every evaluation (block, redact, warn, allow) appears instantly via Server-Sent Events
+- **Stats** — running totals for each action type, updated live
+- **History** — in-memory ring buffer of the last 10,000 events with per-evaluation latency
+- **Filters** — filter by action, stage, or free-text search; click any event for full evaluator details
+- **API** — programmatic access at `/dashboard/api/history` and `/dashboard/api/stats`
+
 ## API
 
 ### `POST /evaluate`

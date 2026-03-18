@@ -1,0 +1,62 @@
+##
+## Demo configuration — verbose, focused on visual impact
+##
+
+server:
+  host: 127.0.0.1
+  port: 9920
+
+evaluators:
+  - name: secret-scanner
+    type: regex
+    stages: [tool.before, tool.after]
+    rules:
+      - label: AWS Access Key
+        pattern: "AKIA[0-9A-Z]{16}"
+        action: redact
+      - label: GitHub Personal Access Token
+        pattern: "ghp_[A-Za-z0-9]{36}"
+        action: redact
+      - label: Slack Webhook URL
+        pattern: "https://hooks\\.slack\\.com/services/T[A-Z0-9]+/B[A-Z0-9]+/[A-Za-z0-9]+"
+        action: redact
+      - label: Private Key Header
+        pattern: "-----BEGIN (RSA |EC |DSA )?PRIVATE KEY-----"
+        action: block
+      - label: Generic API Key Assignment
+        pattern: "(?i)(api[_-]?key|secret[_-]?key|access[_-]?token)\\s*[:=]\\s*['\"]?[A-Za-z0-9]{20,}"
+        action: warn
+
+  - name: dangerous-commands
+    type: regex
+    stages: [tool.before]
+    rules:
+      - label: Recursive delete
+        pattern: "rm\\s+-rf\\s+/"
+        action: block
+        fields: [tool_args.command]
+      - label: DROP TABLE
+        pattern: "(?i)DROP\\s+TABLE"
+        action: block
+      - label: Disk format
+        pattern: "mkfs\\.|dd\\s+if="
+        action: block
+        fields: [tool_args.command]
+      - label: Curl with auth headers
+        pattern: "curl.*(-H|--header).*([Aa]uthorization|[Bb]earer)"
+        action: warn
+        fields: [tool_args.command]
+
+  - name: sigma-threats
+    type: sigma
+    stages: [tool.before, tool.after]
+    rules_dir: ./rules/sigma/
+
+  - name: access-policies
+    type: cel
+    stages: [tool.before]
+    rules:
+      - label: block-exec-non-admin
+        expr: 'tool_name == "exec" && user_id != "admin"'
+        action: warn
+        reason: Shell execution by non-admin user
