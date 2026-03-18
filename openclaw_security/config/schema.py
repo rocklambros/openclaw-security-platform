@@ -61,3 +61,4 @@ class PlatformConfig(BaseModel):
     server: ServerConfig = Field(default_factory=ServerConfig)
     reporting: ReportingConfig = Field(default_factory=ReportingConfig)
     evaluators: list[EvaluatorConfig] = Field(default_factory=list)
+    evaluators_dir: str | None = None

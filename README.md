@@ -180,17 +180,20 @@ curl http://127.0.0.1:9920/health
 
 ## Configuration
 
-The full configuration lives in a single YAML file. See [`config.yaml`](config.yaml) for a fully commented example.
+Configuration can live in a single YAML file, a directory of per-evaluator files, or both. See [`config.yaml`](config.yaml) for a fully commented example.
+
+### Single file
+
+All evaluators inline in one config:
 
 ```yaml
 server:
   host: 127.0.0.1
   port: 9920
-  unix_socket: null              # set to prefer unix socket
 
 reporting:
-  log_file: ./logs/audit.jsonl   # JSON-lines audit trail
-  webhook_url: null              # POST verdicts to SIEM / Slack
+  log_file: ./logs/audit.jsonl
+  webhook_url: null
   webhook_events: [block, redact]
 
 evaluators:
@@ -200,6 +203,43 @@ evaluators:
     stages: [message.before, tool.before, tool.after, params.before]
     # ... type-specific config
 ```
+
+### Multi-file (evaluators directory)
+
+Split evaluators into individual files for cleaner ownership and easier git diffs. Place YAML files in an `evaluators/` directory next to your config:
+
+```
+openclaw-security.yaml          # server + reporting config
+evaluators/
+  secret-scanner.yaml           # one evaluator per file
+  dangerous-commands.yaml
+  sigma-threats.yaml
+  prompt-injection.yaml
+  policy-judge.yaml
+```
+
+Each file is a single evaluator config (no wrapper list needed):
+
+```yaml
+# evaluators/secret-scanner.yaml
+name: secret-scanner
+type: regex
+stages: [tool.before, tool.after]
+rules:
+  - label: AWS Access Key
+    pattern: "AKIA[0-9A-Z]{16}"
+    action: redact
+```
+
+The loader auto-discovers `evaluators/*.yaml` and `evaluators/*.yml` in alphabetical order. To use a custom directory, set `evaluators_dir` in your main config:
+
+```yaml
+evaluators_dir: ./my-rules/
+```
+
+### Inline + directory (merged)
+
+You can use both — inline evaluators run first, directory evaluators are appended. If the same `name` appears in both, the directory version wins. This lets teams override shared defaults with project-specific configs.
 
 ## Evaluation chain
 
@@ -274,6 +314,9 @@ Response:
 ```
 ├── pyproject.toml
 ├── config.yaml                        # Example configuration
+├── evaluators/                        # Drop-in per-evaluator configs (auto-discovered)
+│   ├── secret-scanner.yaml
+│   └── ...
 ├── openclaw_security/
 │   ├── server.py                      # FastAPI evaluation server
 │   ├── engine/
