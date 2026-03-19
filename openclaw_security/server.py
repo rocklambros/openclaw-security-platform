@@ -1,7 +1,10 @@
 """Evaluation server — FastAPI over HTTP / Unix socket.
 
-The TS shim plugin forwards OpenClaw interceptor events here.
-We run the evaluator chain and return a verdict.
+Two modes:
+  server (default) — the TS shim plugin forwards OpenClaw events here.
+  proxy            — reverse proxy between OpenClaw and the Anthropic API.
+                     Full blocking at every stage (message.before, tool.before,
+                     tool.after) without relying on OpenClaw's hook system.
 """
 
 from __future__ import annotations
@@ -28,6 +31,9 @@ from openclaw_security.reporting.logger import AuditLogger
 from openclaw_security.reporting.webhook import WebhookReporter
 
 logger = logging.getLogger("openclaw_security")
+
+# Mode flag — set by main() before lifespan runs
+_mode: str = "server"
 
 
 # --- Global state (set during lifespan) ---
@@ -90,10 +96,53 @@ async def lifespan(app: FastAPI):
     # Dashboard event store
     app.state.event_store = _event_store
 
-    logger.info(
-        "OpenClaw Security Platform started — %d evaluators loaded — dashboard at /dashboard",
-        len(_chain),
-    )
+    # Mount proxy routes if in proxy mode
+    if _mode == "proxy":
+        from openclaw_security.proxy import configure as proxy_configure, router as proxy_router
+
+        async def _report(ctx, result, elapsed_ms):
+            if _audit:
+                _audit.log(ctx, result)
+            if _webhook and result.action.value in (_webhook.events or set()):
+                await _webhook.send(ctx, result)
+            _event_store.push(
+                DashboardEvent(
+                    id=0,
+                    timestamp=ctx.timestamp,
+                    stage=ctx.stage.value,
+                    session_id=ctx.session_id,
+                    user_id=ctx.user_id,
+                    tool_name=ctx.tool_name,
+                    action=result.action.value,
+                    blocked=result.blocked,
+                    reasons=result.reasons,
+                    redacted=result.redacted is not None,
+                    evaluator_results=[
+                        {
+                            "evaluator": r.evaluator,
+                            "action": r.action.value,
+                            "confidence": r.confidence,
+                            "reason": r.reason,
+                        }
+                        for r in result.results
+                    ],
+                    elapsed_ms=elapsed_ms,
+                )
+            )
+
+        proxy_configure(_chain, _report)
+        app.include_router(proxy_router)
+        logger.info(
+            "OpenClaw Security Platform started in PROXY mode — %d evaluators loaded — "
+            "proxy at /anthropic/v1/messages — dashboard at /dashboard",
+            len(_chain),
+        )
+    else:
+        logger.info(
+            "OpenClaw Security Platform started — %d evaluators loaded — dashboard at /dashboard",
+            len(_chain),
+        )
+
     yield
     logger.info("Shutting down")
 
@@ -171,18 +220,28 @@ async def evaluate(req: EvaluateRequest) -> EvaluateResponse:
 async def health():
     return {
         "status": "ok",
+        "mode": _mode,
         "evaluators": len(_chain) if _chain else 0,
     }
 
 
 def main():
+    global _mode
     parser = argparse.ArgumentParser(description="OpenClaw Security Platform")
     parser.add_argument("-c", "--config", help="Path to config YAML")
+    parser.add_argument(
+        "--mode",
+        choices=["server", "proxy"],
+        default="server",
+        help="server = shim-based eval endpoint; proxy = Anthropic API reverse proxy (full blocking)",
+    )
     parser.add_argument("--host", default=None)
     parser.add_argument("--port", type=int, default=None)
     parser.add_argument("--socket", default=None, help="Unix socket path")
     parser.add_argument("--log-level", default="info")
     args = parser.parse_args()
+
+    _mode = args.mode
 
     logging.basicConfig(
         level=getattr(logging, args.log_level.upper()),

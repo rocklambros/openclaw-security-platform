@@ -28,16 +28,17 @@ OpenClaw Gateway
                     └── LLM       (~500ms)— semantic LLM-as-judge
 ```
 
-The TS shim registers four OpenClaw interceptors:
+The TS shim registers three OpenClaw hooks:
 
-| Interceptor | What it guards |
-|---|---|
-| `message.before` | Inbound user messages (prompt injection, abuse) |
-| `tool.before` | Tool calls before execution (dangerous commands, policy violations) |
-| `tool.after` | Tool results before they reach the agent (secrets, PII, data leaks) |
-| `params.before` | LLM parameters before the API call |
+| Hook | Capability | What it covers |
+|---|---|---|
+| `tool.before` | **Block, redact, warn** | Tool calls before execution — dangerous commands, policy violations |
+| `message.before` | Detect and alert | Inbound user messages — prompt injection, abuse |
+| `tool.after` | Detect and alert | Tool results — secret leakage, PII, sensitive data |
 
-Each event is forwarded to the Python evaluation server, which runs your configured evaluator chain **cheapest-first**. A `block` at any stage short-circuits — expensive evaluators are skipped.
+> **Note:** Only `tool.before` can block actions in OpenClaw. The other hooks are fire-and-forget in OpenClaw's architecture — the platform evaluates them and logs/alerts, but cannot prevent the event from proceeding. This is an OpenClaw limitation, not a platform limitation. The standalone SDK wrapper (`demo-chat.py`) can block at all three stages.
+
+Each event is forwarded to the Python evaluation server, which runs your configured evaluator chain **cheapest-first**. A `block` result short-circuits — expensive evaluators are skipped.
 
 ## Evaluator types
 

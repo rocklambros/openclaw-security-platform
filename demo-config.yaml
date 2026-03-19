@@ -7,6 +7,8 @@ server:
   port: 9920
 
 evaluators:
+  # Secrets scanner — runs on tool.before (can block) and tool.after (detect only).
+  # Rules use redact/warn since tool.after is fire-and-forget in OpenClaw.
   - name: secret-scanner
     type: regex
     stages: [tool.before, tool.after]
@@ -22,7 +24,7 @@ evaluators:
         action: redact
       - label: Private Key Header
         pattern: "-----BEGIN (RSA |EC |DSA )?PRIVATE KEY-----"
-        action: block
+        action: warn
       - label: Generic API Key Assignment
         pattern: "(?i)(api[_-]?key|secret[_-]?key|access[_-]?token)\\s*[:=]\\s*['\"]?[A-Za-z0-9]{20,}"
         action: warn

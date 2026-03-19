@@ -17,6 +17,7 @@ class PatternEntry:
 
     regex: re.Pattern[str]
     negate: bool = False
+    field: str | None = None
 
 
 @dataclass
@@ -50,6 +51,7 @@ class RegexRule:
                         PatternEntry(
                             regex=re.compile(entry["pattern"]),
                             negate=entry.get("negate", False),
+                            field=entry.get("field"),
                         )
                     )
 
@@ -94,6 +96,17 @@ class RegexEvaluator(Evaluator):
                 negate: true
             match: all
             action: block
+
+          # Per-pattern field targeting — different patterns against different fields:
+          - label: API key outside safe path
+            patterns:
+              - pattern: "(?i)api[_-]?key\\s*[:=]"
+                field: tool_args.content
+              - pattern: "^/safe/"
+                field: tool_args.file_path
+                negate: true
+            match: all
+            action: block
     """
 
     def __init__(self, name: str, config: dict[str, Any]) -> None:
@@ -117,7 +130,7 @@ class RegexEvaluator(Evaluator):
                 targets.append(full_text)
 
             for target in targets:
-                matched, first_match = self._check_rule(rule, target)
+                matched, first_match = self._check_rule(rule, target, flat)
                 if matched:
                     redacted = None
                     if rule.action == Action.REDACT:
@@ -139,8 +152,16 @@ class RegexEvaluator(Evaluator):
         return self._result()
 
     @staticmethod
-    def _check_rule(rule: RegexRule, target: str) -> tuple[bool, str | None]:
+    def _check_rule(
+        rule: RegexRule,
+        target: str,
+        flat: dict[str, Any] | None = None,
+    ) -> tuple[bool, str | None]:
         """Evaluate a rule's patterns against the target text.
+
+        If a pattern specifies its own ``field``, the value is looked up from
+        *flat* instead of using *target*.  This allows compound rules to check
+        different patterns against different event fields.
 
         Returns (matched, first_match_text).
         """
@@ -148,7 +169,13 @@ class RegexEvaluator(Evaluator):
         results: list[bool] = []
 
         for p in rule.patterns:
-            m = p.regex.search(target)
+            if p.field and flat:
+                val = flat.get(p.field, "")
+                t = val if isinstance(val, str) else str(val) if val is not None else ""
+            else:
+                t = target
+
+            m = p.regex.search(t)
             hit = m is not None
             if p.negate:
                 hit = not hit

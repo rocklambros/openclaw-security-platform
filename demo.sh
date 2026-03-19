@@ -84,8 +84,8 @@ curl -s -X POST "$URL/evaluate" \
 pause
 
 divider
-banner "▸ BLOCK: Private key in tool output"
-echo -e "  ${DIM}A tool accidentally reads a private key file${RESET}"
+banner "▸ WARN: Private key in tool output (detect-only stage)"
+echo -e "  ${DIM}A tool accidentally reads a private key — tool.after can detect but not block${RESET}"
 echo ""
 curl -s -X POST "$URL/evaluate" \
   -H "Content-Type: application/json" \
@@ -194,6 +194,6 @@ pause
 divider
 echo -e "${GREEN}${BOLD}  ✓ Demo complete${RESET}"
 echo ""
-echo -e "  ${DIM}Blocked: 4  |  Redacted: 2  |  Allowed: 3${RESET}"
+echo -e "  ${DIM}Blocked: 3  |  Warned: 1  |  Redacted: 2  |  Allowed: 3${RESET}"
 echo -e "  ${DIM}All decisions made in < 5ms with zero API calls${RESET}"
 echo ""

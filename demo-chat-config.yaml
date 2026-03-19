@@ -1,0 +1,40 @@
+##
+## Demo Chat — color-word config for the CLI chat demo (demo-chat.py)
+##
+## This config is designed for the standalone SDK wrapper (demo-chat.py),
+## which controls the full agent loop and CAN block at all three stages.
+## In an OpenClaw plugin deployment, only tool.before can block.
+##
+## "red"    → blocked at message intake (message.before)
+## "yellow" → blocked before tool execution (tool.before)
+## "green"  → blocked in tool output (tool.after)
+##
+
+server:
+  host: 127.0.0.1
+  port: 9920
+
+evaluators:
+  - name: message-filter
+    type: regex
+    stages: [message.before]
+    rules:
+      - label: Red word in message
+        pattern: "\\bred\\b"
+        action: block
+
+  - name: tool-input-filter
+    type: regex
+    stages: [tool.before]
+    rules:
+      - label: Yellow word in tool args
+        pattern: "\\byellow\\b"
+        action: block
+
+  - name: tool-output-filter
+    type: regex
+    stages: [tool.after]
+    rules:
+      - label: Green word in tool output
+        pattern: "\\bgreen\\b"
+        action: warn

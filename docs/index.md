@@ -47,22 +47,26 @@ title: OpenClaw Security Platform
 <section id="why">
   <div class="container">
     <div class="section-label">How It Works</div>
-    <h2>Guard every stage of the agent lifecycle</h2>
+    <h2>Evaluate every stage of the agent lifecycle</h2>
     <p class="section-desc">
       OpenClaw gives you hooks into the agent loop. This platform turns those hooks
-      into a full security pipeline.
+      into a security pipeline — blocking where possible, detecting everywhere.
     </p>
 
     <table class="stage-table">
       <thead>
-        <tr><th>Stage</th><th>What it guards</th></tr>
+        <tr><th>Stage</th><th>Capability</th><th>What it covers</th></tr>
       </thead>
       <tbody>
-        <tr><td>message.before</td><td>Inbound prompts — injection, PII, abuse</td></tr>
-        <tr><td>tool.before</td><td>Tool calls — dangerous commands, policy violations</td></tr>
-        <tr><td>tool.after</td><td>Tool output — secret leakage, sensitive data</td></tr>
+        <tr><td>tool.before</td><td><strong>Block, redact, warn</strong></td><td>Tool calls — dangerous commands, policy violations</td></tr>
+        <tr><td>message.before</td><td>Detect and alert</td><td>Inbound prompts — injection, PII, abuse</td></tr>
+        <tr><td>tool.after</td><td>Detect and alert</td><td>Tool output — secret leakage, sensitive data</td></tr>
       </tbody>
     </table>
+    <p style="color: var(--text-secondary); font-size: 0.9rem; margin-top: 0.75rem;">
+      Only <code>tool.before</code> can block in OpenClaw (sequential hook). The other stages are fire-and-forget — they evaluate and alert but cannot prevent the event.
+      The standalone SDK wrapper can block at all three stages.
+    </p>
 
     <div class="chain-flow">
       <div class="chain-step">regex <span class="time">~1 μs</span></div>

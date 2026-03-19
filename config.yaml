@@ -14,6 +14,12 @@ reporting:
   # webhook_url: https://your-siem.example.com/webhook
   # webhook_events: [block, redact]
 
+## Hook capabilities in OpenClaw:
+##   tool.before    — can block, redact, warn (sequential hook)
+##   message.before — detect and alert only (fire-and-forget)
+##   tool.after     — detect and alert only (fire-and-forget)
+## Use warn/redact (not block) for rules on message.before and tool.after.
+
 evaluators:
   # ── Regex: fast pattern matching (µs) ─────────────────────────
   - name: secrets-scanner
@@ -65,7 +71,7 @@ evaluators:
   # ── SQL: temporal / aggregate analysis (~10ms) ────────────────
   - name: rate-limiter
     type: sql
-    stages: [tool.before, tool.after]
+    stages: [tool.before]
     rules:
       - label: exec-burst
         query: >
@@ -86,15 +92,17 @@ evaluators:
         reason: "High file write rate detected"
 
   # ── ML: local model inference (~50ms) ─────────────────────────
+  # Note: message.before is detect-only in OpenClaw — use warn, not block.
   # - name: prompt-injection-detector
   #   type: ml
   #   stages: [message.before]
   #   model_path: ./models/prompt-injection-v3.onnx
   #   threshold: 0.85
-  #   action: block
+  #   action: warn
   #   label: prompt_injection
 
   # ── LLM: semantic evaluation (~500ms) ─────────────────────────
+  # Note: tool.after is detect-only in OpenClaw — use warn, not block.
   # - name: semantic-guard
   #   type: llm
   #   stages: [tool.after]
