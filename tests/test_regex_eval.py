@@ -171,10 +171,10 @@ class TestFieldTargeting:
         """Without fields specified, scan all searchable text."""
         tool_before_ctx.tool_args = {"command": "echo hello", "note": "secret_key=ABCD1234EFGH5678"}
         ev = _make_evaluator(
-            [{"label": "secret", "pattern": r"secret_key=\w+", "action": "warn"}]
+            [{"label": "secret", "pattern": r"secret_key=\w+", "action": "detect"}]
         )
         result = await ev.evaluate(tool_before_ctx)
-        assert result.action == Action.WARN
+        assert result.action == Action.DETECT
 
 
 # ── Compound conditions ────────────────────────────────────────

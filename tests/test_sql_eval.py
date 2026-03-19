@@ -140,13 +140,13 @@ class TestEventRecording:
                     "label": "count-all",
                     "query": "SELECT COUNT(*) as cnt FROM events",
                     "condition": "cnt > 0",
-                    "action": "warn",
+                    "action": "detect",
                 }
             ]
         )
         # First event — after recording, count will be 1
         result = await ev.evaluate(_exec_ctx())
-        assert result.action == Action.WARN
+        assert result.action == Action.DETECT
 
     @pytest.mark.asyncio
     async def test_records_message_events(self):
@@ -159,7 +159,7 @@ class TestEventRecording:
                         "WHERE message_text IS NOT NULL"
                     ),
                     "condition": "cnt > 0",
-                    "action": "warn",
+                    "action": "detect",
                 }
             ]
         )
@@ -169,7 +169,7 @@ class TestEventRecording:
             message_text="Hello world",
         )
         result = await ev.evaluate(ctx)
-        assert result.action == Action.WARN
+        assert result.action == Action.DETECT
 
 
 # ── Condition operators ─────────────────────────────────────────
@@ -184,12 +184,12 @@ class TestConditionOperators:
                     "label": "few-events",
                     "query": "SELECT COUNT(*) as cnt FROM events",
                     "condition": "cnt < 10",
-                    "action": "warn",
+                    "action": "detect",
                 }
             ]
         )
         result = await ev.evaluate(_exec_ctx())
-        assert result.action == Action.WARN  # 1 < 10
+        assert result.action == Action.DETECT  # 1 < 10
 
     @pytest.mark.asyncio
     async def test_equals(self):
@@ -199,9 +199,9 @@ class TestConditionOperators:
                     "label": "exactly-one",
                     "query": "SELECT COUNT(*) as cnt FROM events",
                     "condition": "cnt == 1",
-                    "action": "warn",
+                    "action": "detect",
                 }
             ]
         )
         result = await ev.evaluate(_exec_ctx())
-        assert result.action == Action.WARN  # exactly 1 event
+        assert result.action == Action.DETECT  # exactly 1 event

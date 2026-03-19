@@ -24,7 +24,7 @@ Analyze the following event and determine if it poses a security risk.
 
 Respond with ONLY a JSON object:
 {
-  "action": "allow" | "block" | "warn",
+  "action": "allow" | "block" | "detect",
   "confidence": 0.0-1.0,
   "reason": "brief explanation"
 }
@@ -48,7 +48,7 @@ class LLMEvaluator(Evaluator):
           internal system paths, proprietary data.
         max_tokens: 256
         timeout: 5.0
-        default_action: warn  # fallback if LLM fails
+        default_action: detect  # fallback if LLM fails
     """
 
     def __init__(self, name: str, config: dict[str, Any]) -> None:
@@ -58,7 +58,7 @@ class LLMEvaluator(Evaluator):
         self._policy: str = config.get("policy", "")
         self._max_tokens: int = config.get("max_tokens", 256)
         self._timeout: float = config.get("timeout", 5.0)
-        self._default_action = Action(config.get("default_action", "warn"))
+        self._default_action = Action(config.get("default_action", "detect"))
         self._client: anthropic.AsyncAnthropic | None = None
 
     def _get_client(self) -> anthropic.AsyncAnthropic:
@@ -109,7 +109,7 @@ class LLMEvaluator(Evaluator):
             verdict = json.loads(response_text)
 
             return self._result(
-                action=Action(verdict.get("action", "warn")),
+                action=Action(verdict.get("action", "detect")),
                 confidence=float(verdict.get("confidence", 0.5)),
                 reason=verdict.get("reason", "LLM evaluation"),
                 metadata={"model": self._model, "raw_response": response_text[:500]},

@@ -15,10 +15,10 @@
 
 - label: warn-sudo
   expr: 'tool_name == "exec" && tool_args_command.startsWith("sudo")'
-  action: warn
+  action: detect
   reason: Elevated privilege execution detected
 
 - label: block-env-dump
   expr: 'tool_name == "exec" && (tool_args_command == "env" || tool_args_command == "printenv" || tool_args_command.contains("export"))'
-  action: warn
+  action: detect
   reason: Environment variable dump may expose secrets

@@ -61,7 +61,7 @@ class EvaluatorChain:
                 logger.exception("Evaluator %s raised an exception", evaluator.name)
                 result = EvalResult(
                     evaluator=evaluator.name,
-                    action=Action.WARN,
+                    action=Action.DETECT,
                     confidence=0.0,
                     reason=f"Evaluator {evaluator.name} failed with an internal error",
                 )

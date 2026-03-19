@@ -81,7 +81,7 @@ class TestMultiFileConfig:
             config_dir / "config.yaml",
             {
                 "evaluators": [
-                    {"name": "scanner", "type": "regex", "rules": [{"label": "old", "pattern": "old", "action": "warn"}]}
+                    {"name": "scanner", "type": "regex", "rules": [{"label": "old", "pattern": "old", "action": "detect"}]}
                 ]
             },
         )

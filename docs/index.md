@@ -57,9 +57,9 @@ title: OpenClaw Security Platform
         <tr><th>Stage</th><th>Shim plugin</th><th>API proxy</th><th>What it covers</th></tr>
       </thead>
       <tbody>
-        <tr><td>tool.before</td><td><strong>Block, redact, warn</strong></td><td><strong>Block, redact, warn</strong></td><td>Tool calls — dangerous commands, policy violations</td></tr>
-        <tr><td>message.before</td><td>Detect and alert</td><td><strong>Block, redact, warn</strong></td><td>Inbound prompts — injection, PII, abuse</td></tr>
-        <tr><td>tool.after</td><td>Detect and alert</td><td><strong>Block, redact, warn</strong></td><td>Tool output — secret leakage, sensitive data</td></tr>
+        <tr><td>tool.before</td><td><strong>Block, redact, detect</strong></td><td><strong>Block, redact, detect</strong></td><td>Tool calls — dangerous commands, policy violations</td></tr>
+        <tr><td>message.before</td><td>Detect and alert</td><td><strong>Block, redact, detect</strong></td><td>Inbound prompts — injection, PII, abuse</td></tr>
+        <tr><td>tool.after</td><td>Detect and alert</td><td><strong>Block, redact, detect</strong></td><td>Tool output — secret leakage, sensitive data</td></tr>
       </tbody>
     </table>
     <p style="color: var(--text-secondary); font-size: 0.9rem; margin-top: 0.75rem;">
@@ -188,7 +188,7 @@ title: OpenClaw Security Platform
         </div>
         <div class="arch-response">
           <span>→</span> { action, blocked, reasons, redacted }<br>
-          Short-circuits on <span>BLOCK</span> · block > redact > warn
+          Short-circuits on <span>BLOCK</span> · block > redact > detect
         </div>
       </div>
     </div>
@@ -284,7 +284,7 @@ title: OpenClaw Security Platform
     <div class="cards" style="grid-template-columns: 1fr 1fr;">
       <div class="card">
         <h3>Live event stream</h3>
-        <p>Every block, redact, warn, and allow appears instantly via Server-Sent Events. Filter by action, stage, or free-text search. Click any event for full evaluator details.</p>
+        <p>Every block, redact, detect, and allow appears instantly via Server-Sent Events. Filter by action, stage, or free-text search. Click any event for full evaluator details.</p>
       </div>
       <div class="card">
         <h3>Stats and history</h3>

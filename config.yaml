@@ -15,10 +15,10 @@ reporting:
   # webhook_events: [block, redact]
 
 ## Hook capabilities in OpenClaw:
-##   tool.before    — can block, redact, warn (sequential hook)
+##   tool.before    — can block, redact, detect (sequential hook)
 ##   message.before — detect and alert only (fire-and-forget)
 ##   tool.after     — detect and alert only (fire-and-forget)
-## Use warn/redact (not block) for rules on message.before and tool.after.
+## Use detect/redact (not block) for rules on message.before and tool.after.
 
 evaluators:
   # ── Regex: fast pattern matching (µs) ─────────────────────────
@@ -34,7 +34,7 @@ evaluators:
         action: redact
       - label: Generic API Key
         pattern: "(?i)(api[_-]?key|secret[_-]?key|access[_-]?token)\\s*[:=]\\s*['\"]?[A-Za-z0-9]{20,}"
-        action: warn
+        action: detect
 
   - name: dangerous-commands
     type: regex
@@ -49,7 +49,7 @@ evaluators:
         action: block
       - label: Curl to external with secrets
         pattern: "curl.*(-H|--header).*([Aa]uthorization|[Bb]earer)"
-        action: warn
+        action: detect
         fields: [tool_args.command]
 
   # ── Sigma: structured threat detection (ms) ───────────────────
@@ -65,7 +65,7 @@ evaluators:
     rules:
       - label: block-exec-non-admin
         expr: 'tool_name == "exec" && user_id != "admin"'
-        action: warn
+        action: detect
         reason: Shell execution by non-admin user
 
   # ── SQL: temporal / aggregate analysis (~10ms) ────────────────
@@ -88,21 +88,21 @@ evaluators:
           WHERE tool_name = 'write_file' AND session_id = :session_id
           AND timestamp > :now - 30
         condition: "cnt > 15"
-        action: warn
+        action: detect
         reason: "High file write rate detected"
 
   # ── ML: local model inference (~50ms) ─────────────────────────
-  # Note: message.before is detect-only in OpenClaw — use warn, not block.
+  # Note: message.before is detect-only in OpenClaw — use detect, not block.
   # - name: prompt-injection-detector
   #   type: ml
   #   stages: [message.before]
   #   model_path: ./models/prompt-injection-v3.onnx
   #   threshold: 0.85
-  #   action: warn
+  #   action: detect
   #   label: prompt_injection
 
   # ── LLM: semantic evaluation (~500ms) ─────────────────────────
-  # Note: tool.after is detect-only in OpenClaw — use warn, not block.
+  # Note: tool.after is detect-only in OpenClaw — use detect, not block.
   # - name: semantic-guard
   #   type: llm
   #   stages: [tool.after]
@@ -112,4 +112,4 @@ evaluators:
   #     Evaluate whether the tool output contains sensitive information
   #     that should not leave the user's session. Consider: PII, credentials,
   #     internal system paths, proprietary data.
-  #   default_action: warn
+  #   default_action: detect

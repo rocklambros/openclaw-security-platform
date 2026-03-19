@@ -89,7 +89,7 @@ class TestShortCircuit:
 
     @pytest.mark.asyncio
     async def test_warn_does_not_stop_chain(self):
-        warner = StubEvaluator("warner", Action.WARN)
+        warner = StubEvaluator("warner", Action.DETECT)
         after = StubEvaluator("after-warner", Action.ALLOW)
         chain = EvaluatorChain([warner, after])
 
@@ -99,7 +99,7 @@ class TestShortCircuit:
         assert warner.call_count == 1
         assert after.call_count == 1
         # Warn is highest action
-        assert result.action == Action.WARN
+        assert result.action == Action.DETECT
 
     @pytest.mark.asyncio
     async def test_allow_runs_all(self):
@@ -134,13 +134,13 @@ class TestStageFiltering:
 
     @pytest.mark.asyncio
     async def test_message_evaluator_runs_on_message(self):
-        ev = StageLimitedEvaluator("msg-only", stages=["message.before"], action=Action.WARN)
+        ev = StageLimitedEvaluator("msg-only", stages=["message.before"], action=Action.DETECT)
         chain = EvaluatorChain([ev])
 
         ctx = EvalContext(stage=Stage.MESSAGE_BEFORE, message_text="Hello")
         result = await chain.run(ctx)
 
-        assert result.action == Action.WARN
+        assert result.action == Action.DETECT
         assert ev.call_count == 1
 
     @pytest.mark.asyncio
@@ -170,7 +170,7 @@ class TestErrorHandling:
         ctx = EvalContext(stage=Stage.TOOL_BEFORE, tool_name="exec")
         result = await chain.run(ctx)
 
-        assert result.action == Action.WARN
+        assert result.action == Action.DETECT
         assert len(result.results) == 1
         assert "error" in result.results[0].reason.lower()
         assert result.results[0].confidence == 0.0
@@ -186,7 +186,7 @@ class TestErrorHandling:
 
         # Failing evaluator warns, chain continues
         assert after.call_count == 1
-        assert result.action == Action.WARN  # warn from the crash
+        assert result.action == Action.DETECT  # warn from the crash
 
 
 # ── Empty chain ─────────────────────────────────────────────────
@@ -208,7 +208,7 @@ class TestEmptyChain:
 class TestAggregation:
     def test_block_wins_over_warn(self):
         results = [
-            EvalResult(evaluator="a", action=Action.WARN, reason="a warns"),
+            EvalResult(evaluator="a", action=Action.DETECT, reason="a warns"),
             EvalResult(evaluator="b", action=Action.BLOCK, reason="b blocks"),
         ]
         agg = aggregate(results)
@@ -217,7 +217,7 @@ class TestAggregation:
 
     def test_redact_wins_over_warn(self):
         results = [
-            EvalResult(evaluator="a", action=Action.WARN, reason="a warns"),
+            EvalResult(evaluator="a", action=Action.DETECT, reason="a warns"),
             EvalResult(evaluator="b", action=Action.REDACT, redacted="[SAFE]"),
         ]
         agg = aggregate(results)
@@ -248,7 +248,7 @@ class TestAggregation:
     def test_reasons_only_from_non_allow(self):
         results = [
             EvalResult(evaluator="a", action=Action.ALLOW, reason="all good"),
-            EvalResult(evaluator="b", action=Action.WARN, reason="suspicious"),
+            EvalResult(evaluator="b", action=Action.DETECT, reason="suspicious"),
         ]
         agg = aggregate(results)
         assert "suspicious" in agg.reasons

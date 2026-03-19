@@ -108,7 +108,7 @@ class TestModelFailure:
     async def test_missing_model_warns(self):
         ev = _make_evaluator(model_path="/nonexistent/model.onnx")
         result = await ev.evaluate(_message_ctx("test input"))
-        assert result.action == Action.WARN
+        assert result.action == Action.DETECT
         assert "unavailable" in result.reason
 
     @pytest.mark.asyncio
@@ -120,7 +120,7 @@ class TestModelFailure:
         ev._session = session
 
         result = await ev.evaluate(_message_ctx("test"))
-        assert result.action == Action.WARN
+        assert result.action == Action.DETECT
         assert "error" in result.reason.lower()
 
 

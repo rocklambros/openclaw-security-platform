@@ -92,7 +92,7 @@ class MLEvaluator(Evaluator):
             session = self._get_session()
         except Exception:
             return self._result(
-                action=Action.WARN,
+                action=Action.DETECT,
                 confidence=0.0,
                 reason=f"ML model unavailable: {self._model_path}",
             )
@@ -124,7 +124,7 @@ class MLEvaluator(Evaluator):
         except Exception:
             logger.exception("ML inference failed")
             return self._result(
-                action=Action.WARN,
+                action=Action.DETECT,
                 confidence=0.0,
                 reason="ML inference error",
             )

@@ -53,7 +53,7 @@ class EventStore:
 
         # Running stats
         self.total_count = 0
-        self.action_counts: dict[str, int] = {"allow": 0, "block": 0, "warn": 0, "redact": 0}
+        self.action_counts: dict[str, int] = {"allow": 0, "block": 0, "detect": 0, "redact": 0}
         self.stage_counts: dict[str, int] = {}
 
     def push(self, event: DashboardEvent) -> None:

@@ -40,7 +40,7 @@ The TS shim registers three OpenClaw hooks that forward events to the evaluation
 
 | Hook | Capability | What it covers |
 |---|---|---|
-| `tool.before` | **Block, redact, warn** | Tool calls before execution — dangerous commands, policy violations |
+| `tool.before` | **Block, redact, detect** | Tool calls before execution — dangerous commands, policy violations |
 | `message.before` | Detect and alert | Inbound user messages — prompt injection, abuse |
 | `tool.after` | Detect and alert | Tool results — secret leakage, PII, sensitive data |
 
@@ -215,7 +215,7 @@ level: critical
   rules:
     - label: block-exec-non-admin
       expr: 'tool_name == "exec" && user_id != "admin"'
-      action: warn
+      action: detect
       reason: Shell execution by non-admin user
 ```
 
@@ -246,7 +246,7 @@ ONNX Runtime for fast local classification — prompt injection detection, anoma
   stages: [message.before]
   model_path: ./models/prompt-injection-v3.onnx
   threshold: 0.85
-  action: warn
+  action: detect
   label: prompt_injection
 ```
 
@@ -262,7 +262,7 @@ Claude (or any Anthropic model) as a judge for nuanced security decisions that r
   policy: |
     Evaluate whether the tool output contains sensitive information
     that should not leave the user's session.
-  default_action: warn
+  default_action: detect
 ```
 
 ## Configuration
@@ -335,12 +335,12 @@ Evaluators run in cost order with short-circuit on block:
 ```
 Regex ──allow──→ Sigma ──allow──→ CEL ──allow──→ SQL ──allow──→ ML ──allow──→ LLM → allow
   │                │                │               │              │              │
-  block            block            block           block          block          warn
+  block            block            block           block          block          detect
   ↓                ↓                ↓               ↓              ↓              ↓
   STOP             STOP             STOP            STOP           STOP        log + continue
 ```
 
-Actions by priority: **block** > **redact** > **warn** > **allow**.
+Actions by priority: **block** > **redact** > **detect** > **allow**.
 
 ## CLI
 
@@ -362,7 +362,7 @@ Both modes serve the dashboard at `/dashboard` and the health endpoint at `/heal
 
 A built-in real-time dashboard is available at `http://127.0.0.1:9920/dashboard` when the server is running. No extra setup required.
 
-- **Live event stream** — every evaluation (block, redact, warn, allow) appears instantly via Server-Sent Events
+- **Live event stream** — every evaluation (block, redact, detect, allow) appears instantly via Server-Sent Events
 - **Stats** — running totals for each action type, updated live
 - **History** — in-memory ring buffer of the last 10,000 events with per-evaluation latency
 - **Filters** — filter by action, stage, or free-text search; click any event for full evaluator details

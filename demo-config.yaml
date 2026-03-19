@@ -24,10 +24,10 @@ evaluators:
         action: redact
       - label: Private Key Header
         pattern: "-----BEGIN (RSA |EC |DSA )?PRIVATE KEY-----"
-        action: warn
+        action: detect
       - label: Generic API Key Assignment
         pattern: "(?i)(api[_-]?key|secret[_-]?key|access[_-]?token)\\s*[:=]\\s*['\"]?[A-Za-z0-9]{20,}"
-        action: warn
+        action: detect
 
   - name: dangerous-commands
     type: regex
@@ -46,7 +46,7 @@ evaluators:
         fields: [tool_args.command]
       - label: Curl with auth headers
         pattern: "curl.*(-H|--header).*([Aa]uthorization|[Bb]earer)"
-        action: warn
+        action: detect
         fields: [tool_args.command]
 
   - name: sigma-threats
@@ -60,5 +60,5 @@ evaluators:
     rules:
       - label: block-exec-non-admin
         expr: 'tool_name == "exec" && user_id != "admin"'
-        action: warn
+        action: detect
         reason: Shell execution by non-admin user

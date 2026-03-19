@@ -14,7 +14,7 @@
 const DEFAULT_URL = "http://127.0.0.1:9920/evaluate";
 
 interface Verdict {
-  action: "allow" | "block" | "warn" | "redact";
+  action: "allow" | "block" | "detect" | "redact";
   blocked: boolean;
   reasons: string[];
   redacted?: string;

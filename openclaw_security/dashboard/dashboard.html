@@ -130,7 +130,7 @@
       color: var(--text-muted);
     }
 
-    .toolbar select, .toolbar input {
+    .toolbar select, .toolbar input[type="text"] {
       background: var(--bg-card);
       border: 1px solid var(--border);
       border-radius: 6px;
@@ -140,9 +140,42 @@
       font-family: 'JetBrains Mono', monospace;
     }
 
-    .toolbar select:focus, .toolbar input:focus {
+    .toolbar select:focus, .toolbar input[type="text"]:focus {
       outline: none;
       border-color: var(--accent);
+    }
+
+    .filter-checks {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+
+    .filter-checks label {
+      display: flex;
+      align-items: center;
+      gap: 0.3rem;
+      cursor: pointer;
+      font-size: 0.75rem;
+      font-family: 'JetBrains Mono', monospace;
+      padding: 0.25rem 0.5rem;
+      border-radius: 100px;
+      border: 1px solid var(--border-subtle);
+      transition: all 0.15s;
+      user-select: none;
+    }
+
+    .filter-checks label:has(input:checked) {
+      border-color: var(--text-muted);
+    }
+
+    .filter-checks label.fc-block:has(input:checked) { background: rgba(248,113,113,0.1); color: var(--red); border-color: rgba(248,113,113,0.3); }
+    .filter-checks label.fc-redact:has(input:checked) { background: rgba(96,165,250,0.1); color: var(--blue); border-color: rgba(96,165,250,0.3); }
+    .filter-checks label.fc-detect:has(input:checked) { background: rgba(251,191,36,0.1); color: var(--amber); border-color: rgba(251,191,36,0.3); }
+    .filter-checks label.fc-allow:has(input:checked) { background: rgba(74,222,128,0.1); color: var(--green); border-color: rgba(74,222,128,0.3); }
+
+    .filter-checks input[type="checkbox"] {
+      display: none;
     }
 
     .toolbar .spacer { flex: 1; }
@@ -261,7 +294,7 @@
       border: 1px solid rgba(248,113,113,0.2);
     }
 
-    .badge-warn {
+    .badge-detect {
       background: rgba(251,191,36,0.1);
       color: var(--amber);
       border: 1px solid rgba(251,191,36,0.2);
@@ -444,20 +477,18 @@
       <div class="stat-value blue" id="statRedact">0</div>
     </div>
     <div class="stat-card">
-      <div class="stat-label">Warnings</div>
-      <div class="stat-value amber" id="statWarn">0</div>
+      <div class="stat-label">Detected</div>
+      <div class="stat-value amber" id="statDetect">0</div>
     </div>
   </div>
 
   <div class="toolbar">
-    <label>Filter:</label>
-    <select id="filterAction">
-      <option value="">All actions</option>
-      <option value="allow">Allow</option>
-      <option value="block">Block</option>
-      <option value="redact">Redact</option>
-      <option value="warn">Warn</option>
-    </select>
+    <div class="filter-checks">
+      <label class="fc-block"><input type="checkbox" name="filterAction" value="block" checked> block</label>
+      <label class="fc-redact"><input type="checkbox" name="filterAction" value="redact" checked> redact</label>
+      <label class="fc-detect"><input type="checkbox" name="filterAction" value="detect" checked> detect</label>
+      <label class="fc-allow"><input type="checkbox" name="filterAction" value="allow"> allow</label>
+    </div>
     <select id="filterStage">
       <option value="">All stages</option>
       <option value="tool.before">tool.before</option>
@@ -517,7 +548,7 @@
   const liveDot = document.getElementById('liveDot');
   const detailOverlay = document.getElementById('detailOverlay');
   const detailContent = document.getElementById('detailContent');
-  const filterAction = document.getElementById('filterAction');
+  const filterActionChecks = document.querySelectorAll('input[name="filterAction"]');
   const filterStage = document.getElementById('filterStage');
   const filterSearch = document.getElementById('filterSearch');
   const autoScroll = document.getElementById('autoScroll');
@@ -531,7 +562,7 @@
     document.getElementById('statAllow').textContent = (stats.actions && stats.actions.allow) || 0;
     document.getElementById('statBlock').textContent = (stats.actions && stats.actions.block) || 0;
     document.getElementById('statRedact').textContent = (stats.actions && stats.actions.redact) || 0;
-    document.getElementById('statWarn').textContent = (stats.actions && stats.actions.warn) || 0;
+    document.getElementById('statDetect').textContent = (stats.actions && stats.actions.detect) || 0;
   }
 
   // ── Rendering ─────────────────────────────────
@@ -545,11 +576,17 @@
     return 'badge badge-' + action;
   }
 
+  function getCheckedActions() {
+    const checked = [];
+    filterActionChecks.forEach(cb => { if (cb.checked) checked.push(cb.value); });
+    return checked;
+  }
+
   function matchesFilter(ev) {
-    const fa = filterAction.value;
+    const checked = getCheckedActions();
+    if (checked.length > 0 && !checked.includes(ev.action)) return false;
     const fs = filterStage.value;
     const q = filterSearch.value.toLowerCase();
-    if (fa && ev.action !== fa) return false;
     if (fs && ev.stage !== fs) return false;
     if (q) {
       const haystack = [ev.session_id, ev.tool_name, ...ev.reasons].join(' ').toLowerCase();
@@ -621,14 +658,17 @@
     }
 
     if (ev.evaluator_results && ev.evaluator_results.length > 0) {
-      html += `<div class="detail-section"><div class="detail-label">Evaluator Results</div><div class="detail-results">`;
-      ev.evaluator_results.forEach(r => {
-        html += `<div class="detail-result-item">
-          <div class="name">${r.evaluator} <span class="${badgeClass(r.action)}" style="font-size: 0.65rem;">${r.action}</span></div>
-          <div class="reason">${r.reason || '—'}</div>
-        </div>`;
-      });
-      html += `</div></div>`;
+      const nonAllowResults = ev.evaluator_results.filter(r => r.action !== 'allow');
+      if (nonAllowResults.length > 0) {
+        html += `<div class="detail-section"><div class="detail-label">Evaluator Results</div><div class="detail-results">`;
+        nonAllowResults.forEach(r => {
+          html += `<div class="detail-result-item">
+            <div class="name">${r.evaluator} <span class="${badgeClass(r.action)}" style="font-size: 0.65rem;">${r.action}</span></div>
+            <div class="reason">${r.reason || '—'}</div>
+          </div>`;
+        });
+        html += `</div></div>`;
+      }
     }
 
     detailContent.innerHTML = html;
@@ -639,7 +679,7 @@
   detailOverlay.onclick = (e) => { if (e.target === detailOverlay) detailOverlay.classList.remove('open'); };
 
   // ── Filters ───────────────────────────────────
-  filterAction.onchange = renderAll;
+  filterActionChecks.forEach(cb => { cb.onchange = renderAll; });
   filterStage.onchange = renderAll;
   filterSearch.oninput = renderAll;
 

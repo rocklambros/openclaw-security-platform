@@ -11,7 +11,7 @@ from pydantic import BaseModel, Field
 class Action(StrEnum):
     ALLOW = "allow"
     BLOCK = "block"
-    WARN = "warn"
+    DETECT = "detect"
     REDACT = "redact"
 
 
@@ -45,13 +45,13 @@ class AggregatedResult(BaseModel):
 def aggregate(results: list[EvalResult]) -> AggregatedResult:
     """Aggregate individual evaluator results into a final verdict.
 
-    Priority: block > redact > warn > allow.
+    Priority: block > redact > detect > allow.
     If any evaluator blocks, the final action is block.
     """
     if not results:
         return AggregatedResult()
 
-    ACTION_PRIORITY = {Action.BLOCK: 3, Action.REDACT: 2, Action.WARN: 1, Action.ALLOW: 0}
+    ACTION_PRIORITY = {Action.BLOCK: 3, Action.REDACT: 2, Action.DETECT: 1, Action.ALLOW: 0}
 
     final_action = Action.ALLOW
     final_redacted: str | None = None

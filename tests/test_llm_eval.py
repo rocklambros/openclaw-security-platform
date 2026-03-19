@@ -19,7 +19,7 @@ def _make_evaluator(**overrides) -> LLMEvaluator:
         "policy": "Check for sensitive data leakage.",
         "max_tokens": 256,
         "timeout": 5.0,
-        "default_action": "warn",
+        "default_action": "detect",
     }
     config.update(overrides)
     return LLMEvaluator(name="test-llm", config=config)
@@ -84,13 +84,13 @@ class TestSuccessfulEvaluation:
         mock_client = AsyncMock()
         mock_client.messages.create = AsyncMock(
             return_value=_mock_response(
-                '{"action": "warn", "confidence": 0.6, "reason": "Possibly sensitive path"}'
+                '{"action": "detect", "confidence": 0.6, "reason": "Possibly sensitive path"}'
             )
         )
         ev._client = mock_client
 
         result = await ev.evaluate(_tool_after_ctx("/home/user/.config/secrets"))
-        assert result.action == Action.WARN
+        assert result.action == Action.DETECT
 
 
 # ── JSON in code block ──────────────────────────────────────────
@@ -138,7 +138,7 @@ class TestErrorHandling:
         ev._client = mock_client
 
         result = await ev.evaluate(_tool_after_ctx("some data"))
-        assert result.action == Action.WARN  # default_action
+        assert result.action == Action.DETECT  # default_action
         assert "unparseable" in result.reason.lower()
 
     @pytest.mark.asyncio
@@ -158,13 +158,13 @@ class TestErrorHandling:
 
     @pytest.mark.asyncio
     async def test_api_error_uses_default_action(self):
-        ev = _make_evaluator(default_action="warn")
+        ev = _make_evaluator(default_action="detect")
         mock_client = AsyncMock()
         mock_client.messages.create = AsyncMock(side_effect=RuntimeError("API down"))
         ev._client = mock_client
 
         result = await ev.evaluate(_tool_after_ctx("some data"))
-        assert result.action == Action.WARN
+        assert result.action == Action.DETECT
 
 
 # ── Prompt building ─────────────────────────────────────────────

@@ -88,13 +88,13 @@ class TestBasicExpressions:
                 {
                     "label": "warn-sudo",
                     "expr": 'tool_args_command.startsWith("sudo")',
-                    "action": "warn",
+                    "action": "detect",
                     "reason": "Elevated privileges",
                 }
             ]
         )
         result = await ev.evaluate(ctx)
-        assert result.action == Action.WARN
+        assert result.action == Action.DETECT
 
 
 # ── No match ────────────────────────────────────────────────────
@@ -158,7 +158,7 @@ class TestMultipleRules:
                 {
                     "label": "warn-sudo",
                     "expr": 'tool_args_command.startsWith("sudo")',
-                    "action": "warn",
+                    "action": "detect",
                     "reason": "sudo detected",
                 },
                 {
@@ -171,5 +171,5 @@ class TestMultipleRules:
         )
         result = await ev.evaluate(ctx)
         # First matching rule (warn-sudo) should win
-        assert result.action == Action.WARN
+        assert result.action == Action.DETECT
         assert "sudo" in result.reason

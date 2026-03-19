@@ -96,7 +96,7 @@ class TestLevelMapping:
             ]
         )
         result = await ev.evaluate(ctx)
-        assert result.action == Action.WARN
+        assert result.action == Action.DETECT
 
     @pytest.mark.asyncio
     async def test_low_maps_to_warn(self):
@@ -111,7 +111,7 @@ class TestLevelMapping:
             ]
         )
         result = await ev.evaluate(ctx)
-        assert result.action == Action.WARN
+        assert result.action == Action.DETECT
 
 
 # ── Condition logic ─────────────────────────────────────────────
@@ -181,7 +181,7 @@ class TestConditions:
             ]
         )
         result = await ev.evaluate(ctx)
-        assert result.action == Action.WARN
+        assert result.action == Action.DETECT
 
     @pytest.mark.asyncio
     async def test_1_of_wildcard(self):

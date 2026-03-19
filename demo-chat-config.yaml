@@ -37,4 +37,4 @@ evaluators:
     rules:
       - label: Green word in tool output
         pattern: "\\bgreen\\b"
-        action: warn
+        action: detect

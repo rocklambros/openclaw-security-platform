@@ -135,7 +135,7 @@ class SigmaRule:
     def __init__(self, raw: dict[str, Any]) -> None:
         self.title: str = raw.get("title", "Untitled")
         self.level: str = raw.get("level", "medium")
-        self.action = Action.BLOCK if self.level in ("critical", "high") else Action.WARN
+        self.action = Action.BLOCK if self.level in ("critical", "high") else Action.DETECT
         detection = raw.get("detection", {})
         self.matcher = SigmaConditionMatcher(detection)
 
