@@ -49,23 +49,22 @@ title: OpenClaw Security Platform
     <div class="section-label">How It Works</div>
     <h2>Evaluate every stage of the agent lifecycle</h2>
     <p class="section-desc">
-      OpenClaw gives you hooks into the agent loop. This platform turns those hooks
-      into a security pipeline — blocking where possible, detecting everywhere.
+      Two deployment modes — a lightweight plugin for tool-level blocking, or a full reverse proxy for blocking at every stage.
     </p>
 
     <table class="stage-table">
       <thead>
-        <tr><th>Stage</th><th>Capability</th><th>What it covers</th></tr>
+        <tr><th>Stage</th><th>Shim plugin</th><th>API proxy</th><th>What it covers</th></tr>
       </thead>
       <tbody>
-        <tr><td>tool.before</td><td><strong>Block, redact, warn</strong></td><td>Tool calls — dangerous commands, policy violations</td></tr>
-        <tr><td>message.before</td><td>Detect and alert</td><td>Inbound prompts — injection, PII, abuse</td></tr>
-        <tr><td>tool.after</td><td>Detect and alert</td><td>Tool output — secret leakage, sensitive data</td></tr>
+        <tr><td>tool.before</td><td><strong>Block, redact, warn</strong></td><td><strong>Block, redact, warn</strong></td><td>Tool calls — dangerous commands, policy violations</td></tr>
+        <tr><td>message.before</td><td>Detect and alert</td><td><strong>Block, redact, warn</strong></td><td>Inbound prompts — injection, PII, abuse</td></tr>
+        <tr><td>tool.after</td><td>Detect and alert</td><td><strong>Block, redact, warn</strong></td><td>Tool output — secret leakage, sensitive data</td></tr>
       </tbody>
     </table>
     <p style="color: var(--text-secondary); font-size: 0.9rem; margin-top: 0.75rem;">
-      Only <code>tool.before</code> can block in OpenClaw (sequential hook). The other stages are fire-and-forget — they evaluate and alert but cannot prevent the event.
-      The standalone SDK wrapper can block at all three stages.
+      <strong>Shim plugin:</strong> Only <code>tool.before</code> can block (sequential hook). The other stages are fire-and-forget — they evaluate and alert but cannot prevent the event.<br>
+      <strong>API proxy:</strong> Sits between OpenClaw and the Anthropic API. Can block at every stage, including rewriting streamed responses.
     </p>
 
     <div class="chain-flow">
@@ -143,14 +142,27 @@ title: OpenClaw Security Platform
 <section id="architecture">
   <div class="container">
     <div class="section-label">Architecture</div>
-    <h2>Thin shim, heavy Python</h2>
+    <h2>Two deployment modes</h2>
     <p class="section-desc">
-      A lightweight TypeScript plugin forwards OpenClaw hook events to a Python evaluation server over HTTP.
+      Choose the level of control you need — a lightweight plugin or a full reverse proxy.
     </p>
+
+    <div class="cards" style="grid-template-columns: 1fr 1fr; margin-bottom: 2rem;">
+      <div class="card">
+        <div class="card-type">Mode 1</div>
+        <h3>Shim Plugin</h3>
+        <p>A TypeScript plugin registers OpenClaw hooks and forwards events to the Python evaluation server over HTTP. Blocks on <code>tool.before</code>, detects on all stages.</p>
+      </div>
+      <div class="card">
+        <div class="card-type">Mode 2</div>
+        <h3>API Proxy</h3>
+        <p>A reverse proxy sits between OpenClaw and the Anthropic API. Intercepts every request and response. <strong>Blocks at every stage</strong> — including rewriting streamed responses.</p>
+      </div>
+    </div>
 
     <div class="arch-diagram">
       <div class="arch-node arch-node-gateway">
-        <div class="arch-node-label">Plugin</div>
+        <div class="arch-node-label">Shim Plugin</div>
         <h3>OpenClaw Gateway</h3>
         <div class="arch-hooks">
           <div class="arch-hook"><span class="arch-hook-dot blue"></span> before_tool_call</div>
@@ -180,44 +192,84 @@ title: OpenClaw Security Platform
         </div>
       </div>
     </div>
+
+    <p style="color: var(--text-secondary); font-size: 0.9rem; margin-top: 1.5rem; max-width: 720px;">
+      <strong>API Proxy mode:</strong> OpenClaw → Proxy (:9920) → Anthropic API. The proxy evaluates at all three stages inline, with full blocking capability. No plugin installation needed — it's transparent to OpenClaw.
+    </p>
   </div>
 </section>
 
 <section id="quick-start">
   <div class="container">
     <div class="section-label">Get Started</div>
-    <h2>Running in four steps</h2>
+    <h2>Choose your deployment mode</h2>
 
+    <h3 style="margin-top: 2rem; color: var(--text-secondary); font-size: 0.9rem; text-transform: uppercase; letter-spacing: 0.05em;">Shim Plugin — lightweight, tool-level blocking</h3>
     <div class="steps">
       <div class="step">
         <div class="step-num">1</div>
         <div class="step-content">
           <h3>Install the platform</h3>
-          <p><code>pip install -e .</code></p>
+          <p><code>git clone &amp;&amp; cd openclaw-security-platform &amp;&amp; pip install -e .</code></p>
         </div>
       </div>
       <div class="step">
         <div class="step-num">2</div>
         <div class="step-content">
-          <h3>Start the evaluation server</h3>
-          <p><code>openclaw-security</code> — runs on <code>http://127.0.0.1:9920</code></p>
+          <h3>Install and enable the plugin</h3>
+          <p>
+            <code>openclaw plugins install --link ./shim</code><br>
+            <code>openclaw plugins enable openclaw-security</code><br>
+            <code>openclaw config set plugins.allow '["openclaw-security"]'</code>
+          </p>
         </div>
       </div>
       <div class="step">
         <div class="step-num">3</div>
         <div class="step-content">
-          <h3>Link the OpenClaw plugin</h3>
-          <p><code>cd shim && openclaw plugins install --link .</code></p>
+          <h3>Start the evaluation server</h3>
+          <p><code>openclaw-security serve -c openclaw-security.yaml</code></p>
         </div>
       </div>
       <div class="step">
         <div class="step-num">4</div>
         <div class="step-content">
           <h3>Restart your gateway</h3>
-          <p><code>openclaw gateway restart</code> — hooks are live.</p>
+          <p><code>openclaw gateway --force</code> — hooks are live.</p>
         </div>
       </div>
     </div>
+
+    <h3 style="margin-top: 3rem; color: var(--text-secondary); font-size: 0.9rem; text-transform: uppercase; letter-spacing: 0.05em;">API Proxy — full blocking at every stage</h3>
+    <div class="steps">
+      <div class="step">
+        <div class="step-num">1</div>
+        <div class="step-content">
+          <h3>Install the platform</h3>
+          <p><code>git clone &amp;&amp; cd openclaw-security-platform &amp;&amp; pip install -e .</code></p>
+        </div>
+      </div>
+      <div class="step">
+        <div class="step-num">2</div>
+        <div class="step-content">
+          <h3>Configure OpenClaw to use the proxy</h3>
+          <p><code>openclaw-security setup-openclaw</code><br>
+          <span style="color: var(--text-muted); font-size: 0.85rem;">Registers a secured provider, copies your API key, and sets it as default.</span></p>
+        </div>
+      </div>
+      <div class="step">
+        <div class="step-num">3</div>
+        <div class="step-content">
+          <h3>Start the proxy</h3>
+          <p><code>openclaw-security serve --mode proxy -c openclaw-security.yaml</code><br>
+          <span style="color: var(--text-muted); font-size: 0.85rem;">All Anthropic API traffic now flows through the security proxy.</span></p>
+        </div>
+      </div>
+    </div>
+
+    <p style="color: var(--text-secondary); font-size: 0.9rem; margin-top: 2rem;">
+      To revert proxy mode: <code>openclaw-security revert-openclaw</code>
+    </p>
   </div>
 </section>
 
@@ -268,6 +320,7 @@ title: OpenClaw Security Platform
         <h3>Health check</h3>
 <pre>{
   "status": "ok",
+  "mode": "server",
   "evaluators": 4
 }</pre>
         <p style="margin-top: 1rem;">Returns evaluator count and server status. Use for monitoring and liveness probes.</p>

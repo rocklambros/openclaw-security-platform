@@ -17,7 +17,7 @@ The platform doesn't tell you what's dangerous. **You** tell **it** — through 
 
 ```
 OpenClaw Gateway
-  └── TS shim plugin (registers interceptors)
+  └── TS shim plugin (registers hooks)
         └── HTTP / Unix socket
               └── Python evaluation server
                     ├── Regex     (~μs)   — pattern matching
@@ -28,7 +28,15 @@ OpenClaw Gateway
                     └── LLM       (~500ms)— semantic LLM-as-judge
 ```
 
-The TS shim registers three OpenClaw hooks:
+Each event is forwarded to the Python evaluation server, which runs your configured evaluator chain **cheapest-first**. A `block` result short-circuits — expensive evaluators are skipped.
+
+## Deployment modes
+
+There are two ways to deploy the security platform, depending on what level of control you need.
+
+### Mode 1: Shim plugin (default)
+
+The TS shim registers three OpenClaw hooks that forward events to the evaluation server:
 
 | Hook | Capability | What it covers |
 |---|---|---|
@@ -36,27 +44,146 @@ The TS shim registers three OpenClaw hooks:
 | `message.before` | Detect and alert | Inbound user messages — prompt injection, abuse |
 | `tool.after` | Detect and alert | Tool results — secret leakage, PII, sensitive data |
 
-> **Note:** Only `tool.before` can block actions in OpenClaw. The other hooks are fire-and-forget in OpenClaw's architecture — the platform evaluates them and logs/alerts, but cannot prevent the event from proceeding. This is an OpenClaw limitation, not a platform limitation. The standalone SDK wrapper (`demo-chat.py`) can block at all three stages.
+> **Note:** Only `tool.before` can block actions in shim mode. The `message.before` and `tool.after` hooks are fire-and-forget in OpenClaw's architecture — the platform evaluates them and logs/alerts, but cannot prevent the event from proceeding.
 
-Each event is forwarded to the Python evaluation server, which runs your configured evaluator chain **cheapest-first**. A `block` result short-circuits — expensive evaluators are skipped.
+**When to use:** You want lightweight, low-latency security with blocking on tool execution.
+
+### Mode 2: API proxy (full blocking)
+
+A reverse proxy sits between OpenClaw and the Anthropic API. It intercepts every request and response, evaluates at all three stages, and can **block at every stage** — including rewriting the LLM's streaming response to remove blocked tool calls.
+
+```
+OpenClaw  ──→  Proxy (:9920)  ──→  Anthropic API
+                 │
+                 ├── message.before: scan user messages → can block
+                 ├── tool.before:    scan tool_use blocks in LLM response → can block
+                 └── tool.after:     scan tool results in follow-up requests → can block
+```
+
+**When to use:** You need full blocking at every stage, or you want to inspect/modify LLM responses before they reach OpenClaw.
+
+## Quick start
+
+### 1. Install
+
+```bash
+git clone https://github.com/zenitysec/openclaw-security-platform.git
+cd openclaw-security-platform
+pip install -e .
+```
+
+### 2. Configure evaluators
+
+```bash
+cp config.yaml openclaw-security.yaml
+# Edit openclaw-security.yaml — enable/disable evaluators, add rules
+```
+
+### 3a. Shim mode setup
+
+Install the plugin into OpenClaw and enable it:
+
+```bash
+# Install (link to avoid copying files)
+openclaw plugins install --link ./shim
+
+# Enable the plugin
+openclaw plugins enable openclaw-security
+
+# Add to your OpenClaw allow-list (required for non-bundled plugins)
+openclaw config set plugins.allow '["openclaw-security"]'
+```
+
+Start the evaluation server:
+
+```bash
+openclaw-security server --config openclaw-security.yaml
+
+# Or with a Unix socket (lower latency):
+openclaw-security server --config openclaw-security.yaml --socket /tmp/openclaw-security.sock
+```
+
+Restart the OpenClaw gateway so it loads the plugin:
+
+```bash
+openclaw gateway --force
+```
+
+The shim reads `OPENCLAW_SECURITY_URL` to find the evaluation server (defaults to `http://127.0.0.1:9920/evaluate`). You can override the URL and timeout:
+
+```bash
+export OPENCLAW_SECURITY_URL=http://127.0.0.1:9920/evaluate
+export OPENCLAW_SECURITY_TIMEOUT=3000
+```
+
+Verify the plugin loaded:
+
+```bash
+openclaw plugins list
+# openclaw-security should show status: loaded
+```
+
+### 3b. Proxy mode setup
+
+Configure OpenClaw to route through the proxy:
+
+```bash
+# Registers a custom "anthropic-secured" provider, sets it as default model,
+# copies your existing Anthropic API key, and disables the shim plugin
+openclaw-security setup-openclaw
+
+# Optional: specify a different model or proxy address
+openclaw-security setup-openclaw --model claude-sonnet-4-20250514 --port 9920
+```
+
+Start the proxy server:
+
+```bash
+openclaw-security serve --mode proxy --config openclaw-security.yaml
+```
+
+To revert OpenClaw back to using Anthropic directly:
+
+```bash
+openclaw-security revert-openclaw
+```
+
+No plugin installation needed — the proxy is transparent to OpenClaw.
+
+### 4. Verify
+
+```bash
+curl http://127.0.0.1:9920/health
+# {"status": "ok", "mode": "server", "evaluators": 5}
+```
 
 ## Evaluator types
 
 ### Regex — fast pattern matching
 Compiled regex patterns scanned against event text fields. Catches known secrets (AWS keys, GitHub tokens), PII (SSN, credit cards), and dangerous commands (`rm -rf /`, `DROP TABLE`).
 
+Supports compound rules with `match: all` (AND), `negate: true` (NOT), and per-pattern `field` targeting (different patterns checked against different event fields):
+
 ```yaml
 - name: secrets-scanner
   type: regex
   stages: [tool.before, tool.after]
   rules:
+    # Simple pattern:
     - label: AWS Access Key
       pattern: "AKIA[0-9A-Z]{16}"
       action: redact
-    - label: Destructive rm
-      pattern: "rm\\s+-rf\\s+/"
+
+    # Compound with per-pattern fields (AND across different fields):
+    - label: API key outside safe path
+      patterns:
+        - pattern: "(?i)api[_-]?key\\s*[:=]"
+          field: tool_args.content
+        - pattern: "^/safe/"
+          field: tool_args.file_path
+          negate: true
+      match: all
       action: block
-      fields: [tool_args.command]
 ```
 
 ### Sigma — structured threat detection
@@ -98,7 +225,7 @@ In-memory SQLite stores recent events. SQL queries detect patterns across multip
 ```yaml
 - name: rate-limiter
   type: sql
-  stages: [tool.before, tool.after]
+  stages: [tool.before]
   rules:
     - label: exec-burst
       query: >
@@ -119,7 +246,7 @@ ONNX Runtime for fast local classification — prompt injection detection, anoma
   stages: [message.before]
   model_path: ./models/prompt-injection-v3.onnx
   threshold: 0.85
-  action: block
+  action: warn
   label: prompt_injection
 ```
 
@@ -136,47 +263,6 @@ Claude (or any Anthropic model) as a judge for nuanced security decisions that r
     Evaluate whether the tool output contains sensitive information
     that should not leave the user's session.
   default_action: warn
-```
-
-## Quick start
-
-### 1. Install the Python evaluation server
-
-```bash
-cd OpenClawSecurityPlatform
-pip install -e .
-```
-
-### 2. Configure your evaluators
-
-```bash
-cp config.yaml openclaw-security.yaml
-# Edit openclaw-security.yaml — enable/disable evaluators, add rules
-```
-
-### 3. Start the server
-
-```bash
-openclaw-security --config openclaw-security.yaml
-
-# Or with a Unix socket (lower latency):
-openclaw-security --config openclaw-security.yaml --socket /tmp/openclaw-security.sock
-```
-
-### 4. Install the OpenClaw plugin
-
-Copy the `shim/` directory into your OpenClaw plugins folder, or register it in your OpenClaw config:
-
-```bash
-# Point the shim at your running server
-export OPENCLAW_SECURITY_URL=http://127.0.0.1:9920/evaluate
-```
-
-### 5. Verify
-
-```bash
-curl http://127.0.0.1:9920/health
-# {"status": "ok", "evaluators": 5}
 ```
 
 ## Configuration
@@ -201,7 +287,7 @@ evaluators:
   - name: my-evaluator
     type: regex | sigma | cel | sql | ml | llm
     enabled: true
-    stages: [message.before, tool.before, tool.after, params.before]
+    stages: [message.before, tool.before, tool.after]
     # ... type-specific config
 ```
 
@@ -247,14 +333,25 @@ You can use both — inline evaluators run first, directory evaluators are appen
 Evaluators run in cost order with short-circuit on block:
 
 ```
-Regex ──allow──→ Sigma ──allow──→ CEL ──allow──→ SQL ──allow──→ ML ──allow──→ LLM → ✅
+Regex ──allow──→ Sigma ──allow──→ CEL ──allow──→ SQL ──allow──→ ML ──allow──→ LLM → allow
   │                │                │               │              │              │
   block            block            block           block          block          warn
   ↓                ↓                ↓               ↓              ↓              ↓
-  🚫               🚫               🚫              🚫             🚫          ⚠️ log
+  STOP             STOP             STOP            STOP           STOP        log + continue
 ```
 
 Actions by priority: **block** > **redact** > **warn** > **allow**.
+
+## CLI
+
+```
+openclaw-security server  --config <path>  [--host HOST] [--port PORT] [--socket PATH]
+openclaw-security proxy   --config <path>  [--host HOST] [--port PORT]
+```
+
+The `server` subcommand starts the evaluation endpoint for shim mode. The `proxy` subcommand starts the Anthropic API reverse proxy with inline evaluation.
+
+Both modes serve the dashboard at `/dashboard` and the health endpoint at `/health`.
 
 ## Reporting
 
@@ -307,19 +404,23 @@ Response:
 ### `GET /health`
 
 ```json
-{ "status": "ok", "evaluators": 5 }
+{ "status": "ok", "mode": "server", "evaluators": 5 }
 ```
 
 ## Project structure
 
 ```
 ├── pyproject.toml
-├── config.yaml                        # Example configuration
+├── config.yaml                        # Example configuration (all evaluator types)
+├── demo-config.yaml                   # Demo configuration (regex + sigma + CEL)
+├── e2e-config.yaml                    # Thorough E2E test config (all evaluator types)
 ├── evaluators/                        # Drop-in per-evaluator configs (auto-discovered)
 │   ├── secret-scanner.yaml
 │   └── ...
 ├── openclaw_security/
-│   ├── server.py                      # FastAPI evaluation server
+│   ├── cli.py                         # CLI entrypoint (server/proxy subcommands)
+│   ├── server.py                      # FastAPI evaluation server + proxy bootstrap
+│   ├── proxy.py                       # Anthropic API reverse proxy (SSE streaming)
 │   ├── engine/
 │   │   ├── context.py                 # Normalized event model
 │   │   ├── result.py                  # Result types + aggregation
@@ -340,10 +441,10 @@ Response:
 │       └── webhook.py                 # External webhook reporter
 ├── shim/
 │   └── src/index.ts                   # Thin TS OpenClaw plugin
-└── rules/                             # Default rule packs
-    ├── regex/secrets.yaml
-    ├── sigma/dangerous-tools.yaml
-    └── cel/policies.yaml
+├── rules/                             # Default rule packs
+│   └── sigma/dangerous-tools.yaml
+└── scripts/
+    └── gen-demo-model.py              # Generate demo ONNX model for ML evaluator
 ```
 
 ## Writing custom evaluators
