@@ -130,7 +130,7 @@
       color: var(--text-muted);
     }
 
-    .toolbar select, .toolbar input[type="text"] {
+    .toolbar select, .toolbar input[type="text"], .toolbar input[type="datetime-local"] {
       background: var(--bg-card);
       border: 1px solid var(--border);
       border-radius: 6px;
@@ -138,9 +138,10 @@
       font-size: 0.8rem;
       padding: 0.4rem 0.6rem;
       font-family: 'JetBrains Mono', monospace;
+      color-scheme: dark;
     }
 
-    .toolbar select:focus, .toolbar input[type="text"]:focus {
+    .toolbar select:focus, .toolbar input[type="text"]:focus, .toolbar input[type="datetime-local"]:focus {
       outline: none;
       border-color: var(--accent);
     }
@@ -496,6 +497,10 @@
       <option value="message.before">message.before</option>
     </select>
     <input type="text" id="filterSearch" placeholder="Search session, tool..." style="width: 180px;">
+    <label>From</label>
+    <input type="datetime-local" id="filterStart" step="1">
+    <label>To</label>
+    <input type="datetime-local" id="filterEnd" step="1">
     <div class="spacer"></div>
     <span style="font-size: 0.75rem; color: var(--text-muted); font-family: 'JetBrains Mono', monospace;" id="eventCount">0 events</span>
     <label style="display: flex; align-items: center; gap: 0.4rem; cursor: pointer;">
@@ -507,7 +512,7 @@
     <table>
       <thead>
         <tr>
-          <th>Time</th>
+          <th>Date and Time</th>
           <th>Action</th>
           <th>Stage</th>
           <th>Tool</th>
@@ -551,6 +556,8 @@
   const filterActionChecks = document.querySelectorAll('input[name="filterAction"]');
   const filterStage = document.getElementById('filterStage');
   const filterSearch = document.getElementById('filterSearch');
+  const filterStart = document.getElementById('filterStart');
+  const filterEnd = document.getElementById('filterEnd');
   const autoScroll = document.getElementById('autoScroll');
 
   let allEvents = [];
@@ -568,8 +575,10 @@
   // ── Rendering ─────────────────────────────────
   function formatTime(ts) {
     const d = new Date(ts * 1000);
-    return d.toLocaleTimeString('en-US', { hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit' })
+    const date = d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+    const time = d.toLocaleTimeString('en-US', { hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit' })
       + '.' + String(d.getMilliseconds()).padStart(3, '0');
+    return date + ' ' + time;
   }
 
   function badgeClass(action) {
@@ -591,6 +600,14 @@
     if (q) {
       const haystack = [ev.session_id, ev.tool_name, ...ev.reasons].join(' ').toLowerCase();
       if (!haystack.includes(q)) return false;
+    }
+    if (filterStart.value) {
+      const startTs = new Date(filterStart.value).getTime() / 1000;
+      if (ev.timestamp < startTs) return false;
+    }
+    if (filterEnd.value) {
+      const endTs = new Date(filterEnd.value).getTime() / 1000;
+      if (ev.timestamp > endTs) return false;
     }
     return true;
   }
@@ -682,6 +699,8 @@
   filterActionChecks.forEach(cb => { cb.onchange = renderAll; });
   filterStage.onchange = renderAll;
   filterSearch.oninput = renderAll;
+  filterStart.onchange = renderAll;
+  filterEnd.onchange = renderAll;
 
   // ── Load history ──────────────────────────────
   async function loadHistory() {
