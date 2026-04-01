@@ -77,16 +77,30 @@ class EventStore:
         limit: int = 50,
         offset: int = 0,
         action: str | None = None,
+        actions: list[str] | None = None,
         stage: str | None = None,
+        start_ts: float | None = None,
+        end_ts: float | None = None,
     ) -> list[dict[str, Any]]:
-        """Return recent events with optional filters."""
+        """Return recent events with optional filters.
+
+        Filters are applied *before* the limit/offset slice so that
+        the caller always gets up to ``limit`` matching events.
+        """
         events = list(self._events)
         events.reverse()  # newest first
 
         if action:
             events = [e for e in events if e.action == action]
+        elif actions:
+            action_set = set(actions)
+            events = [e for e in events if e.action in action_set]
         if stage:
             events = [e for e in events if e.stage == stage]
+        if start_ts is not None:
+            events = [e for e in events if e.timestamp >= start_ts]
+        if end_ts is not None:
+            events = [e for e in events if e.timestamp <= end_ts]
 
         return [e.to_dict() for e in events[offset : offset + limit]]
 

@@ -30,14 +30,25 @@ async def dashboard_page():
 @router.get("/api/history")
 async def history(
     request: Request,
-    limit: int = Query(50, ge=1, le=10_000),
+    limit: int = Query(50, ge=1, le=500),
     offset: int = Query(0, ge=0),
     action: str | None = Query(None),
+    actions: list[str] | None = Query(None),
     stage: str | None = Query(None),
+    start_ts: float | None = Query(None),
+    end_ts: float | None = Query(None),
 ):
-    """Return paginated event history."""
+    """Return paginated event history with server-side filtering."""
     store = _get_store(request)
-    events = store.history(limit=limit, offset=offset, action=action, stage=stage)
+    events = store.history(
+        limit=limit,
+        offset=offset,
+        action=action,
+        actions=actions,
+        stage=stage,
+        start_ts=start_ts,
+        end_ts=end_ts,
+    )
     return {"events": events, "stats": store.stats()}
 
 
