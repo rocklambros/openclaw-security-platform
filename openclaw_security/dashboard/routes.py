@@ -30,7 +30,7 @@ async def dashboard_page():
 @router.get("/api/history")
 async def history(
     request: Request,
-    limit: int = Query(50, ge=1, le=500),
+    limit: int = Query(50, ge=1, le=10_000),
     offset: int = Query(0, ge=0),
     action: str | None = Query(None),
     stage: str | None = Query(None),
