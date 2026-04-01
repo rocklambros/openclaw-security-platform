@@ -220,10 +220,54 @@
       text-transform: uppercase;
       letter-spacing: 0.05em;
       border-bottom: 1px solid var(--border);
-      z-index: 1;
+      z-index: 2;
     }
 
     thead th:first-child { padding-left: 2rem; }
+
+    thead th.sortable {
+      cursor: pointer;
+      user-select: none;
+    }
+
+    thead th.sortable:hover { color: var(--text-secondary); }
+
+    thead th .sort-arrow {
+      display: inline-block;
+      margin-left: 0.3rem;
+      font-size: 0.6rem;
+      opacity: 0.3;
+    }
+
+    thead th.sort-asc .sort-arrow { opacity: 1; color: var(--accent); }
+    thead th.sort-desc .sort-arrow { opacity: 1; color: var(--accent); }
+
+    /* ── Column filter row ─────────────────────── */
+    thead tr.filter-row th {
+      position: sticky;
+      top: 28px;
+      background: var(--bg-card);
+      padding: 0.25rem 0.5rem;
+      border-bottom: 1px solid var(--border);
+      z-index: 1;
+    }
+
+    thead tr.filter-row th:first-child { padding-left: 1.75rem; }
+
+    .col-filter {
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      color: var(--text);
+      font-size: 0.7rem;
+      padding: 0.25rem 0.4rem;
+      font-family: 'JetBrains Mono', monospace;
+      width: 100%;
+      box-sizing: border-box;
+    }
+
+    .col-filter:focus { outline: none; border-color: var(--accent); }
+    .col-filter::placeholder { color: var(--text-muted); opacity: 0.5; }
 
     tbody tr {
       border-bottom: 1px solid var(--border-subtle);
@@ -506,14 +550,23 @@
   <div class="table-wrap" id="tableWrap">
     <table>
       <thead>
-        <tr>
-          <th>Time</th>
-          <th>Action</th>
-          <th>Stage</th>
-          <th>Tool</th>
-          <th>Session</th>
-          <th>Reason</th>
-          <th style="text-align: right;">Latency</th>
+        <tr id="headerRow">
+          <th class="sortable" data-col="timestamp">Time <span class="sort-arrow">&#9650;</span></th>
+          <th class="sortable" data-col="action">Action <span class="sort-arrow">&#9650;</span></th>
+          <th class="sortable" data-col="stage">Stage <span class="sort-arrow">&#9650;</span></th>
+          <th class="sortable" data-col="tool_name">Tool <span class="sort-arrow">&#9650;</span></th>
+          <th class="sortable" data-col="session_id">Session <span class="sort-arrow">&#9650;</span></th>
+          <th class="sortable" data-col="reasons">Reason <span class="sort-arrow">&#9650;</span></th>
+          <th class="sortable" data-col="elapsed_ms" style="text-align: right;">Latency <span class="sort-arrow">&#9650;</span></th>
+        </tr>
+        <tr class="filter-row">
+          <th><input class="col-filter" data-col="timestamp" type="text" placeholder="Filter..."></th>
+          <th><input class="col-filter" data-col="action" type="text" placeholder="Filter..."></th>
+          <th><input class="col-filter" data-col="stage" type="text" placeholder="Filter..."></th>
+          <th><input class="col-filter" data-col="tool_name" type="text" placeholder="Filter..."></th>
+          <th><input class="col-filter" data-col="session_id" type="text" placeholder="Filter..."></th>
+          <th><input class="col-filter" data-col="reasons" type="text" placeholder="Filter..."></th>
+          <th><input class="col-filter" data-col="elapsed_ms" type="text" placeholder="Filter..." style="text-align: right;"></th>
         </tr>
       </thead>
       <tbody id="eventBody">
@@ -552,9 +605,13 @@
   const filterStage = document.getElementById('filterStage');
   const filterSearch = document.getElementById('filterSearch');
   const autoScroll = document.getElementById('autoScroll');
+  const colFilters = document.querySelectorAll('.col-filter');
+  const headerRow = document.getElementById('headerRow');
 
   let allEvents = [];
   let selectedEvent = null;
+  let sortCol = null;   // current sort column key
+  let sortDir = 0;      // 0=none, 1=asc, -1=desc
 
   // ── Stats ─────────────────────────────────────
   function updateStats(stats) {
@@ -582,6 +639,28 @@
     return checked;
   }
 
+  function getColFilterValues() {
+    const vals = {};
+    colFilters.forEach(input => {
+      const v = input.value.trim().toLowerCase();
+      if (v) vals[input.dataset.col] = v;
+    });
+    return vals;
+  }
+
+  function getColText(ev, col) {
+    switch (col) {
+      case 'timestamp': return formatTime(ev.timestamp);
+      case 'action': return ev.action || '';
+      case 'stage': return ev.stage || '';
+      case 'tool_name': return ev.tool_name || '';
+      case 'session_id': return ev.session_id || '';
+      case 'reasons': return ev.reasons.join('; ');
+      case 'elapsed_ms': return ev.elapsed_ms != null ? String(ev.elapsed_ms) : '';
+      default: return '';
+    }
+  }
+
   function matchesFilter(ev) {
     const checked = getCheckedActions();
     if (checked.length > 0 && !checked.includes(ev.action)) return false;
@@ -592,7 +671,31 @@
       const haystack = [ev.session_id, ev.tool_name, ...ev.reasons].join(' ').toLowerCase();
       if (!haystack.includes(q)) return false;
     }
+    // Column filters
+    const colVals = getColFilterValues();
+    for (const col in colVals) {
+      if (!getColText(ev, col).toLowerCase().includes(colVals[col])) return false;
+    }
     return true;
+  }
+
+  function getSortValue(ev, col) {
+    switch (col) {
+      case 'timestamp': return ev.timestamp;
+      case 'elapsed_ms': return ev.elapsed_ms || 0;
+      default: return getColText(ev, col).toLowerCase();
+    }
+  }
+
+  function sortEvents(events) {
+    if (!sortCol || sortDir === 0) return events;
+    return events.slice().sort((a, b) => {
+      const va = getSortValue(a, sortCol);
+      const vb = getSortValue(b, sortCol);
+      if (va < vb) return -1 * sortDir;
+      if (va > vb) return 1 * sortDir;
+      return 0;
+    });
   }
 
   function renderRow(ev, flash) {
@@ -614,7 +717,7 @@
 
   function renderAll() {
     tbody.innerHTML = '';
-    const visible = allEvents.filter(matchesFilter);
+    const visible = sortEvents(allEvents.filter(matchesFilter));
     visible.forEach(ev => tbody.appendChild(renderRow(ev, false)));
     emptyState.style.display = visible.length === 0 ? 'flex' : 'none';
     eventCount.textContent = visible.length + ' event' + (visible.length !== 1 ? 's' : '');
@@ -678,10 +781,45 @@
   document.getElementById('closeDetail').onclick = () => detailOverlay.classList.remove('open');
   detailOverlay.onclick = (e) => { if (e.target === detailOverlay) detailOverlay.classList.remove('open'); };
 
+  // ── Column sorting ─────────────────────────────
+  function updateSortUI() {
+    headerRow.querySelectorAll('th.sortable').forEach(th => {
+      th.classList.remove('sort-asc', 'sort-desc');
+      const arrow = th.querySelector('.sort-arrow');
+      if (th.dataset.col === sortCol && sortDir === 1) {
+        th.classList.add('sort-asc');
+        arrow.innerHTML = '&#9650;';
+      } else if (th.dataset.col === sortCol && sortDir === -1) {
+        th.classList.add('sort-desc');
+        arrow.innerHTML = '&#9660;';
+      } else {
+        arrow.innerHTML = '&#9650;';
+      }
+    });
+  }
+
+  headerRow.querySelectorAll('th.sortable').forEach(th => {
+    th.onclick = () => {
+      const col = th.dataset.col;
+      if (sortCol === col) {
+        // cycle: asc -> desc -> none
+        if (sortDir === 1) sortDir = -1;
+        else if (sortDir === -1) { sortDir = 0; sortCol = null; }
+        else sortDir = 1;
+      } else {
+        sortCol = col;
+        sortDir = 1;
+      }
+      updateSortUI();
+      renderAll();
+    };
+  });
+
   // ── Filters ───────────────────────────────────
   filterActionChecks.forEach(cb => { cb.onchange = renderAll; });
   filterStage.onchange = renderAll;
   filterSearch.oninput = renderAll;
+  colFilters.forEach(input => { input.oninput = renderAll; });
 
   // ── Load history ──────────────────────────────
   async function loadHistory() {
